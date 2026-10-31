@@ -86,7 +86,7 @@ jobs:
           sudo ln -sf /tmp/godot-bin/godot /usr/local/bin/godot
           godot --version
 
-          if [ ! -f "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/web_nothreads_release.wasm32.zip" ]; then
+          if [ ! -f "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/web_release.zip" ]; then
             wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
             unzip -q -o /tmp/templates.tpz -d /tmp/templates
             mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/"
