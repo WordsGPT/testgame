@@ -32,6 +32,8 @@ var _sway_time: float = 0.0
 var _recoil_offset: float = 0.0
 var _fire_cooldown: float = 0.0
 var _last_hovered: Node = null
+var _has_free_mouse_pos: bool = false
+var _free_mouse_pos: Vector2 = Vector2.ZERO
 
 const GUN_HIP_POS := Vector3(0.30, -0.25, -0.44)
 const GUN_ADS_POS := Vector3(0.0, -0.17, -0.34)
@@ -87,15 +89,22 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not controls_enabled:
 		return
 
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var sens := MOUSE_SENS * (0.58 if is_aiming else 1.0)
-		rotate_y(-event.relative.x * sens)
-		_pitch = clampf(_pitch - event.relative.y * sens, deg_to_rad(-78.0), deg_to_rad(78.0))
-		head.rotation.x = _pitch
+	if event is InputEventMouseMotion:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			_has_free_mouse_pos = false
+			var sens := MOUSE_SENS * (0.58 if is_aiming else 1.0)
+			rotate_y(-event.relative.x * sens)
+			_pitch = clampf(_pitch - event.relative.y * sens, deg_to_rad(-78.0), deg_to_rad(78.0))
+			head.rotation.x = _pitch
+		else:
+			_has_free_mouse_pos = true
+			_free_mouse_pos = event.position
 
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+				_has_free_mouse_pos = true
+				_free_mouse_pos = event.position
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			try_fire()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
@@ -187,7 +196,11 @@ func _physics_process(delta: float) -> void:
 func _cast_center_ray() -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	var from_pt := camera.global_position
-	var to_pt := from_pt + (-camera.global_transform.basis.z) * MAX_RAY_DIST
+	var ray_dir := -camera.global_transform.basis.z
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and _has_free_mouse_pos:
+		from_pt = camera.project_ray_origin(_free_mouse_pos)
+		ray_dir = camera.project_ray_normal(_free_mouse_pos)
+	var to_pt := from_pt + ray_dir * MAX_RAY_DIST
 	var query := PhysicsRayQueryParameters3D.create(from_pt, to_pt)
 	query.exclude = [get_rid()]
 	query.collide_with_areas = true

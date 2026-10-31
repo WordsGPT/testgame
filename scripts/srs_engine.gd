@@ -259,53 +259,43 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 	var show_en_text := false
 
 	if tier == 0:
-		mode_tag = "STAGE %d (%s) • STEP 1: LEARN & SHOOT (NEW WORD)" % [sec_num, cefr_badge]
-		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = "%s   →   %s = %s" % [
-			item["cmd_f"] if use_female else item["cmd_m"],
-			item["fr_def"],
-			item["en"],
-		]
-		sub_en = "Pronunciation: %s  •  Tip: %s  (Shoot the highlighted green target!)" % [item["ipa"], item["tip"]]
+		mode_tag = "STAGE %d • LEVEL 1: NEW WORD" % sec_num
+		audio_file = "word_%s.ogg" % target_id
+		prompt_fr = "★ %s  =  %s" % [item["fr_def"], item["en"]]
+		sub_en = str(item["tip"])
 		show_fr_text = true
-		show_en_text = (l1_mode != 2)
+		show_en_text = true
 	elif tier == 1:
-		mode_tag = "STAGE %d (%s) • STEP 2: READ & SHOOT (RECALL)" % [sec_num, cefr_badge]
-		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = "%s   (Target: « %s »)" % [
-			item["cmd_f"] if use_female else item["cmd_m"],
-			item["fr_def"],
-		]
-		sub_en = "%s = %s  •  %s" % [item["fr_def"], item["en"], item["ipa"]]
+		mode_tag = "STAGE %d • LEVEL 2: READ & SHOOT" % sec_num
+		audio_file = "word_%s.ogg" % target_id
+		prompt_fr = "Shoot:  %s" % item["fr_def"]
+		sub_en = "Sounds like: \"%s\"   •   (%s)" % [item["ipa"], item["en"]]
 		show_fr_text = true
 		show_en_text = (l1_mode == 1)
 	elif tier == 2:
-		mode_tag = "STAGE %d (%s) • STEP 3: LISTEN & SHOOT (AUDIO ONLY)" % [sec_num, cefr_badge]
+		mode_tag = "STAGE %d • LEVEL 3: LISTEN & SHOOT" % sec_num
 		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = "%s   (« %s »)" % [
-			item["cmd_f"] if use_female else item["cmd_m"],
-			item["fr_def"],
-		]
-		sub_en = "%s = %s  •  %s" % [item["fr_def"], item["en"], item["ipa"]]
+		prompt_fr = "Shoot:  %s" % item["fr_def"]
+		sub_en = "Sounds like: \"%s\"   •   (%s)" % [item["ipa"], item["en"]]
 		show_fr_text = false
 		show_en_text = (l1_mode == 1)
 	else:
 		var use_inhibit := ((int(c["correct"]) + global_step) % 2 == 1)
 		if use_inhibit:
-			mode_tag = "STAGE %d (%s) • STEP 4: NEGATION TRAP (NE TIREZ PAS...)" % [sec_num, cefr_badge]
+			mode_tag = "STAGE %d • LEVEL 4: DECOY TRAP" % sec_num
 			audio_file = "inhibit_%s.ogg" % target_id
 			prompt_fr = item["inhibit"]
-			sub_en = "Watch out for 'Ne tirez pas' (Don't shoot)! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
+			sub_en = "'Pas...' means NOT that one! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
 			required_decoy = item["inhibit_decoy"]
 			var item_idx := VocabData.get_all_ids().find(target_id)
-			speaker_name = "LT. DENISE" if (item_idx % 2 == 0) else "CMDT. HENRI"
+			speaker_name = "DENISE" if (item_idx % 2 == 0) else "HENRI"
 		else:
-			mode_tag = "STAGE %d (%s) • STEP 4: FRENCH RIDDLE CLUE" % [sec_num, cefr_badge]
+			mode_tag = "STAGE %d • LEVEL 4: FRENCH CLUE" % sec_num
 			audio_file = "desc_%s.ogg" % target_id
 			prompt_fr = item["desc"]
-			sub_en = "%s  →  Shoot: %s (%s)" % [item["desc_en"], item["fr_def"], item["en"]]
+			sub_en = "%s  →  %s (%s)" % [item["desc_en"], item["fr_def"], item["en"]]
 			var item_idx := VocabData.get_all_ids().find(target_id)
-			speaker_name = "CMDT. HENRI" if (item_idx % 2 == 0) else "LT. DENISE"
+			speaker_name = "HENRI" if (item_idx % 2 == 0) else "DENRI"
 		show_fr_text = (tier == 3 and l1_mode != 2)
 		show_en_text = (l1_mode == 1)
 
@@ -479,24 +469,8 @@ func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
 
 	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else sector_filter
 
-	# In CEFR A2 (-3) or Stages 5–7 (effective_sec 4..6): weave 3D Size/Speed Challenge on shot 5 and Grammar on shot 6
-	if sector_filter == -3 or (effective_sec >= 4 and effective_sec <= 6):
-		if prompt_in_wave == 5:
-			return build_modifier_prompt_spec()
-		if prompt_in_wave == 6:
-			return build_grammar_prompt_spec()
-
-	# In CEFR B1 (-4) or Stages 8–9 (effective_sec >= 7): weave 3D Modifier on shot 4, DELF Scenario on shot 5, Grammar on shot 6
-	if sector_filter == -4 or effective_sec >= 7:
-		if prompt_in_wave == 4:
-			return build_modifier_prompt_spec()
-		if prompt_in_wave == 5:
-			return build_scenario_prompt_spec()
-		if prompt_in_wave == 6:
-			return build_grammar_prompt_spec()
-
-	# In Stages 2–4 (effective_sec 1..3), add a fun 3D Size/Speed bonus challenge on the final shot of the wave (shot 6)
-	if effective_sec >= 1 and effective_sec <= 3 and prompt_in_wave == 6:
+	# Once the player reaches Stage 3+, include a fun 3D Size/Speed/Position bonus challenge on Shot 6!
+	if effective_sec >= 2 and prompt_in_wave == 6:
 		return build_modifier_prompt_spec()
 
 	var target_id := select_next_target()

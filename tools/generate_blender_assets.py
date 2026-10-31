@@ -20,7 +20,7 @@ def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def make_mat(name, color, metallic=0.05, roughness=0.38, emission=None, emission_strength=0.0):
+def make_mat(name, color, metallic=0.0, roughness=0.75, emission=None, emission_strength=0.0):
     mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
@@ -29,13 +29,20 @@ def make_mat(name, color, metallic=0.05, roughness=0.38, emission=None, emission
         bsdf = nodes.new("ShaderNodeBsdfPrincipled")
     rgba = (color[0], color[1], color[2], color[3] if len(color) > 3 else 1.0)
     bsdf.inputs["Base Color"].default_value = rgba
-    bsdf.inputs["Metallic"].default_value = metallic
-    bsdf.inputs["Roughness"].default_value = roughness
+    # Enforce a warm, tactile matte-clay / brushed-satin finish (never glossy plastic!)
+    actual_metal = metallic * 0.65 if metallic >= 0.4 else 0.0
+    actual_rough = max(0.45, roughness) if metallic >= 0.4 else max(0.74, roughness)
+    bsdf.inputs["Metallic"].default_value = actual_metal
+    bsdf.inputs["Roughness"].default_value = actual_rough
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = 0.16
+    elif "Specular" in bsdf.inputs:
+        bsdf.inputs["Specular"].default_value = 0.16
     if emission is not None and emission_strength > 0.0:
         em_rgba = (emission[0], emission[1], emission[2], 1.0)
         if "Emission Color" in bsdf.inputs:
             bsdf.inputs["Emission Color"].default_value = em_rgba
-            bsdf.inputs["Emission Strength"].default_value = emission_strength
+            bsdf.inputs["Emission Strength"].default_value = min(emission_strength, 0.8)
         elif "Emission" in bsdf.inputs:
             bsdf.inputs["Emission"].default_value = em_rgba
     return mat
@@ -1052,64 +1059,79 @@ def build_holo_crystal():
     finalize_and_save("holo_crystal.blend", 1.12)
 
 
+def build_lit():
+    reset_scene()
+    wood = make_mat("BedWood", (0.48, 0.28, 0.14), roughness=0.78)
+    sheet = make_mat("BedSheet", (0.95, 0.92, 0.86), roughness=0.82)
+    blanket = make_mat("BedBlanket", (0.82, 0.28, 0.24), roughness=0.80)
+    # Bed frame & headboard
+    add_cube(loc=(0, 0, -0.08), scale=(0.92, 1.18, 0.14), mat=wood, bevel=0.02)
+    add_cube(loc=(0, 0.54, 0.18), scale=(0.94, 0.10, 0.44), mat=wood, bevel=0.02)
+    for sx in (-0.42, 0.42):
+        for sy in (-0.52, 0.52):
+            add_cyl(loc=(sx, sy, -0.22), r=0.05, depth=0.28, mat=wood, verts=12)
+    # Mattress, pillow, blanket
+    add_cube(loc=(0, -0.02, 0.04), scale=(0.84, 1.06, 0.16), mat=sheet, bevel=0.04)
+    add_cube(loc=(0, -0.16, 0.06), scale=(0.86, 0.74, 0.17), mat=blanket, bevel=0.04)
+    add_cube(loc=(0, 0.34, 0.15), scale=(0.56, 0.24, 0.10), mat=sheet, bevel=0.04)
+    finalize_and_save("lit.blend", 1.24)
+
+
+def build_lampe():
+    reset_scene()
+    brass = make_mat("LampBrass", (0.84, 0.64, 0.24), metallic=0.7, roughness=0.45)
+    shade = make_mat("LampShade", (0.96, 0.86, 0.62), roughness=0.78, emission=(0.95, 0.80, 0.45), emission_strength=0.35)
+    add_cyl(loc=(0, 0, -0.42), r=0.28, depth=0.08, mat=brass, verts=24)
+    add_cyl(loc=(0, 0, -0.08), r=0.045, depth=0.64, mat=brass, verts=16)
+    add_cone(loc=(0, 0, 0.26), r1=0.42, r2=0.22, depth=0.46, mat=shade, verts=26)
+    finalize_and_save("lampe.blend", 1.22)
+
+
 def build_blaster():
     reset_scene()
-    pearl = make_mat("ReceiverPearl", (0.92, 0.94, 0.98), metallic=0.35, roughness=0.22)
-    cobalt = make_mat("CobaltShroud", (0.12, 0.38, 0.88), metallic=0.55, roughness=0.22)
-    dark = make_mat("CarbonGrip", (0.14, 0.16, 0.20), metallic=0.65, roughness=0.35)
-    gold = make_mat("GoldAccent", (0.96, 0.78, 0.22), metallic=0.88, roughness=0.18)
-    core_m = make_mat("SonicCore", (0.15, 0.92, 1.0), roughness=0.08, emission=(0.12, 0.88, 1.0), emission_strength=2.8)
+    walnut = make_mat("WalnutStock", (0.44, 0.24, 0.12), roughness=0.76)
+    steel = make_mat("CharcoalBarrel", (0.22, 0.22, 0.24), metallic=0.60, roughness=0.48)
+    brass = make_mat("BrassTrim", (0.88, 0.68, 0.24), metallic=0.75, roughness=0.42)
+    ivory = make_mat("SightBead", (0.98, 0.94, 0.84), roughness=0.70)
 
-    # Sleek upper receiver & contoured barrel shroud along -Y (forward in Godot after import)
-    add_cube(loc=(0, 0.04, 0.01), scale=(0.085, 0.38, 0.11), mat=pearl, bevel=0.018)
-    add_cube(loc=(0, -0.22, 0.015), scale=(0.072, 0.38, 0.085), mat=cobalt, bevel=0.015)
-    # Twin glowing cyan plasma rails + barrel core
-    add_cyl(loc=(0, -0.34, 0.02), r=0.018, depth=0.58, rot=(math.pi * 0.5, 0, 0), mat=core_m, verts=18)
-    for sx in (-0.040, 0.040):
-        add_cube(loc=(sx, -0.20, 0.02), scale=(0.012, 0.42, 0.022), mat=core_m, bevel=0.003)
-        add_cube(loc=(sx * 0.95, 0.02, 0.055), scale=(0.012, 0.28, 0.018), mat=gold, bevel=0.003)
-    # Muzzle brake ring
-    add_torus(loc=(0, -0.58, 0.02), major_r=0.036, minor_r=0.009, rot=(math.pi * 0.5, 0, 0), mat=core_m)
-    # Holographic Reflex Sight on top rail
-    add_cube(loc=(0, 0.0, 0.082), scale=(0.058, 0.12, 0.022), mat=dark, bevel=0.005)
-    for sx in (-0.026, 0.026):
-        add_cube(loc=(sx, 0.0, 0.115), scale=(0.008, 0.07, 0.052), mat=cobalt, bevel=0.002)
-    add_cube(loc=(0, 0.0, 0.140), scale=(0.056, 0.07, 0.008), mat=cobalt, bevel=0.002)
-    add_torus(loc=(0, -0.01, 0.115), major_r=0.014, minor_r=0.003, rot=(math.pi * 0.5, 0, 0), mat=core_m, seg=20)
-    # Angled ergonomic grip & foregrip
-    add_cube(loc=(0, 0.13, -0.10), scale=(0.062, 0.085, 0.18), rot=(-0.32, 0, 0), mat=dark, bevel=0.012)
-    add_cube(loc=(0, -0.16, -0.055), scale=(0.052, 0.12, 0.065), rot=(0.22, 0, 0), mat=dark, bevel=0.010)
+    # Classic warm walnut & brushed brass sporting carbine
+    add_cube(loc=(0, 0.02, -0.01), scale=(0.078, 0.42, 0.10), mat=walnut, bevel=0.020)
+    add_cube(loc=(0, -0.22, -0.015), scale=(0.064, 0.34, 0.075), mat=walnut, bevel=0.016)
+    # Matte charcoal barrel + brass barrel bands
+    add_cyl(loc=(0, -0.26, 0.038), r=0.024, depth=0.68, rot=(math.pi * 0.5, 0, 0), mat=steel, verts=20)
+    for by in (-0.12, -0.32, -0.52):
+        add_cyl(loc=(0, by, 0.015), r=0.036, depth=0.024, rot=(math.pi * 0.5, 0, 0), mat=brass, verts=20)
+    # Brass receiver side-plates & ring sight
+    add_cube(loc=(0, 0.06, 0.02), scale=(0.084, 0.22, 0.065), mat=brass, bevel=0.010)
+    add_torus(loc=(0, 0.04, 0.088), major_r=0.022, minor_r=0.004, rot=(math.pi * 0.5, 0, 0), mat=brass, seg=20)
+    add_sphere(loc=(0, -0.56, 0.068), scale=(0.010, 0.010, 0.016), mat=ivory, seg=12, ring=8)
+    # Walnut grip
+    add_cube(loc=(0, 0.16, -0.10), scale=(0.062, 0.09, 0.18), rot=(-0.34, 0, 0), mat=walnut, bevel=0.015)
     finalize_and_save("blaster.blend", target_size=0.74, center_origin=False)
 
 
 def build_drone():
     reset_scene()
-    hull = make_mat("DroneHull", (0.14, 0.16, 0.22), metallic=0.80, roughness=0.30)
-    glow = make_mat("GravGlow", (0.18, 0.78, 1.0), roughness=0.15, emission=(0.15, 0.72, 1.0), emission_strength=1.8)
-    pad = make_mat("ProjectorPad", (0.26, 0.30, 0.38), metallic=0.65, roughness=0.35)
-    add_torus(loc=(0, 0, 0), major_r=0.52, minor_r=0.055, mat=hull, seg=28)
-    add_torus(loc=(0, 0, -0.04), major_r=0.46, minor_r=0.025, mat=glow, seg=28)
-    add_cyl(loc=(0, 0, 0.02), r=0.26, depth=0.07, mat=pad, verts=22)
-    add_torus(loc=(0, 0, 0.06), major_r=0.22, minor_r=0.018, mat=glow, seg=22)
-    for i in range(4):
-        ang = i * (math.pi * 0.5) + math.pi * 0.25
-        px, py = 0.54 * math.cos(ang), 0.54 * math.sin(ang)
-        add_cyl(loc=(px, py, 0), r=0.11, depth=0.12, mat=hull, verts=14)
-        add_cyl(loc=(px, py, -0.065), r=0.075, depth=0.03, mat=glow, verts=14)
-        add_cube(loc=(px * 0.62, py * 0.62, 0), scale=(0.28, 0.06, 0.05), rot=(0, 0, ang), mat=hull, bevel=0.008)
-    finalize_and_save("drone.blend", target_size=1.28, center_origin=True)
+    wood = make_mat("CarrierWood", (0.52, 0.32, 0.16), roughness=0.78)
+    brass = make_mat("CarrierBrass", (0.86, 0.66, 0.22), metallic=0.70, roughness=0.45)
+    cream = make_mat("PadCream", (0.96, 0.92, 0.82), roughness=0.80)
+    red = make_mat("BullseyeRed", (0.84, 0.22, 0.18), roughness=0.78)
+    add_cyl(loc=(0, 0, 0.0), r=0.48, depth=0.09, mat=wood, verts=28)
+    add_torus(loc=(0, 0, 0.02), major_r=0.48, minor_r=0.035, mat=brass, seg=28)
+    add_cyl(loc=(0, 0, 0.045), r=0.38, depth=0.03, mat=cream, verts=26)
+    add_torus(loc=(0, 0, 0.06), major_r=0.26, minor_r=0.022, mat=red, seg=24)
+    finalize_and_save("drone.blend", target_size=1.22, center_origin=True)
 
 
 def build_pedestal():
     reset_scene()
-    slate = make_mat("PedestalSlate", (0.12, 0.15, 0.21), metallic=0.65, roughness=0.35)
-    trim = make_mat("PedestalSilver", (0.72, 0.77, 0.85), metallic=0.85, roughness=0.25)
-    holo = make_mat("HoloEmitter", (0.15, 0.88, 0.95), roughness=0.12, emission=(0.12, 0.82, 0.95), emission_strength=2.0)
-    add_cyl(loc=(0, 0, 0.06), r=0.58, depth=0.12, mat=slate, verts=8, smooth=False)
-    add_cone(loc=(0, 0, 0.52), r1=0.46, r2=0.36, depth=0.80, mat=slate, verts=8, smooth=False)
-    add_cyl(loc=(0, 0, 0.95), r=0.44, depth=0.10, mat=trim, verts=8, smooth=False)
-    add_torus(loc=(0, 0, 1.01), major_r=0.34, minor_r=0.025, mat=holo, seg=24)
-    add_cyl(loc=(0, 0, 1.00), r=0.32, depth=0.03, mat=holo, verts=22)
+    stone = make_mat("PedestalStone", (0.88, 0.82, 0.72), roughness=0.82)
+    terra = make_mat("PedestalTerra", (0.78, 0.36, 0.24), roughness=0.78)
+    brass = make_mat("PedestalBrass", (0.86, 0.68, 0.24), metallic=0.65, roughness=0.45)
+    add_cyl(loc=(0, 0, 0.06), r=0.56, depth=0.12, mat=terra, verts=12, smooth=False)
+    add_cone(loc=(0, 0, 0.52), r1=0.44, r2=0.36, depth=0.80, mat=stone, verts=12, smooth=False)
+    add_cyl(loc=(0, 0, 0.95), r=0.44, depth=0.10, mat=terra, verts=12, smooth=False)
+    add_cyl(loc=(0, 0, 1.01), r=0.34, depth=0.03, mat=brass, verts=24)
     finalize_and_save("pedestal.blend", target_size=1.15, center_origin=False)
 
 
@@ -1125,6 +1147,7 @@ def main():
         # Sector 6 & 7 (A2 - Tech, Médias, Ville & Quotidien)
         build_ordinateur, build_telephone, build_appareil, build_microphone, build_batterie,
         build_parapluie, build_sac, build_chaussure, build_chaise, build_guitare,
+        build_lit, build_lampe,
         # Sector 8 (B1 - Santé & Société)
         build_medicament, build_ambulance, build_lettre, build_journal, build_cadeau,
         # Sector 9 (B1 - Environnement & Monde)

@@ -126,23 +126,23 @@ func _ready() -> void:
 
 
 # ==============================================================================
-# BRIGHT STYLIZED DAYLIGHT TRAINING RANGE & LIGHTING
+# WARM SUNNY FRENCH COURTYARD & PARK RANGE
 # ==============================================================================
 
 func _build_environment_and_lights() -> void:
 	var env := Environment.new()
 	var sky := Sky.new()
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.14, 0.36, 0.76)
-	sky_mat.sky_horizon_color = Color(0.45, 0.68, 0.92)
-	sky_mat.ground_bottom_color = Color(0.12, 0.16, 0.24)
-	sky_mat.ground_horizon_color = Color(0.28, 0.42, 0.64)
+	sky_mat.sky_top_color = Color(0.46, 0.72, 0.90)
+	sky_mat.sky_horizon_color = Color(0.98, 0.86, 0.70)
+	sky_mat.ground_bottom_color = Color(0.38, 0.48, 0.28)
+	sky_mat.ground_horizon_color = Color(0.88, 0.78, 0.62)
 	sky.sky_material = sky_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_color = Color(0.72, 0.80, 0.94)
-	env.ambient_light_energy = 0.72
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.95, 0.88, 0.76)
+	env.ambient_light_energy = 0.46
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 
 	var world_env := WorldEnvironment.new()
@@ -150,30 +150,31 @@ func _build_environment_and_lights() -> void:
 	world_root.add_child(world_env)
 
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.97, 0.92)
-	sun.light_energy = 1.05
+	sun.light_color = Color(1.0, 0.94, 0.82)
+	sun.light_energy = 0.78
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 55.0
-	sun.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
+	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
 	world_root.add_child(sun)
 
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.60, 0.80, 1.0)
-	fill.light_energy = 0.42
+	fill.light_color = Color(0.96, 0.86, 0.72)
+	fill.light_energy = 0.24
 	fill.shadow_enabled = false
 	fill.rotation_degrees = Vector3(-35.0, 150.0, 0.0)
 	world_root.add_child(fill)
 
 	_menu_cam = Camera3D.new()
-	_menu_cam.fov = 62.0
+	_menu_cam.fov = 60.0
 	world_root.add_child(_menu_cam)
 
 
-func _make_mat(albedo: Color, rough: float = 0.45, metal: float = 0.15, unshaded: bool = false) -> StandardMaterial3D:
+func _make_mat(albedo: Color, rough: float = 0.82, metal: float = 0.0, unshaded: bool = false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = albedo
 	m.roughness = rough
 	m.metallic = metal
+	m.metallic_specular = 0.12
 	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
@@ -201,59 +202,102 @@ func _add_static_box(parent: Node3D, size: Vector3, pos: Vector3, rot_deg: Vecto
 		parent.add_child(sb)
 
 
+func _add_park_tree(parent: Node3D, pos: Vector3, scale_f: float, trunk_mat: Material, leaf_mat: Material) -> void:
+	var t_root := Node3D.new()
+	t_root.position = pos
+	t_root.scale = Vector3.ONE * scale_f
+	parent.add_child(t_root)
+
+	var trunk := MeshInstance3D.new()
+	var tcyl := CylinderMesh.new()
+	tcyl.top_radius = 0.22
+	tcyl.bottom_radius = 0.30
+	tcyl.height = 2.4
+	trunk.mesh = tcyl
+	trunk.material_override = trunk_mat
+	trunk.position = Vector3(0, 1.2, 0)
+	t_root.add_child(trunk)
+
+	for i in range(3):
+		var crown := MeshInstance3D.new()
+		var sph := SphereMesh.new()
+		var r := 1.45 - float(i) * 0.28
+		sph.radius = r
+		sph.height = r * 1.65
+		crown.mesh = sph
+		crown.material_override = leaf_mat
+		crown.position = Vector3(0, 2.7 + float(i) * 1.15, 0)
+		t_root.add_child(crown)
+
+
 func _build_arena_geometry() -> void:
 	var arena := Node3D.new()
 	arena.name = "HolodeckArena"
 	world_root.add_child(arena)
 
-	# Rich mid-tone royal slate courtyard floor + navy-cobalt backdrop wall so bright 3D models pop with vivid saturation!
-	var floor_mat := _make_mat(Color(0.18, 0.24, 0.35), 0.50, 0.15)
-	var deck_mat := _make_mat(Color(0.24, 0.31, 0.44), 0.42, 0.18)
-	var wall_mat := _make_mat(Color(0.14, 0.20, 0.32), 0.48, 0.25)
-	var pillar_mat := _make_mat(Color(0.76, 0.82, 0.90), 0.35, 0.20)
-	var gold_trim := _make_mat(Color(0.95, 0.78, 0.24), 0.25, 0.75)
+	# Warm Mediterranean Sandstone Courtyard + Terracotta & Timber Architecture + Green Park Perimeter
+	var grass_mat := _make_mat(Color(0.32, 0.50, 0.24), 0.90, 0.0)
+	var stone_court := _make_mat(Color(0.68, 0.59, 0.47), 0.88, 0.0)
+	var stone_tile := _make_mat(Color(0.75, 0.67, 0.55), 0.88, 0.0)
+	var timber_mat := _make_mat(Color(0.45, 0.27, 0.15), 0.84, 0.0)
+	var wall_cream := _make_mat(Color(0.84, 0.76, 0.64), 0.86, 0.0)
+	var terra_mat := _make_mat(Color(0.74, 0.33, 0.20), 0.82, 0.0)
+	var leaf_mat := _make_mat(Color(0.24, 0.48, 0.22), 0.88, 0.0)
+	var leaf_light := _make_mat(Color(0.32, 0.56, 0.26), 0.88, 0.0)
 
-	var lane_glow := _make_mat(Color(0.22, 0.78, 1.0), 0.2, 0.0, true)
-	var fr_blue := _make_mat(Color(0.12, 0.38, 0.92), 0.2, 0.0, true)
-	var fr_white := _make_mat(Color(0.96, 0.98, 1.0), 0.2, 0.0, true)
-	var fr_red := _make_mat(Color(0.92, 0.18, 0.24), 0.2, 0.0, true)
+	# Outer grass park & inner warm stone courtyard
+	_add_static_box(arena, Vector3(64.0, 0.5, 64.0), Vector3(0, -0.28, 0), Vector3.ZERO, grass_mat, true)
+	_add_static_box(arena, Vector3(26.0, 0.10, 28.0), Vector3(0, -0.02, -1.0), Vector3.ZERO, stone_court, true)
 
-	_add_static_box(arena, Vector3(42.0, 0.5, 42.0), Vector3(0, -0.25, 0), Vector3.ZERO, floor_mat, true)
-	_add_static_box(arena, Vector3(16.0, 0.18, 6.0), Vector3(0, 0.09, 6.8), Vector3.ZERO, deck_mat, true)
-	_add_static_box(arena, Vector3(22.0, 0.20, 6.5), Vector3(0, 0.10, -13.5), Vector3.ZERO, deck_mat, true)
+	# Alternating warm travertine lane strips (subtle natural stone, zero neon grid!)
+	for lx in [-6.0, -2.0, 2.0, 6.0]:
+		_add_static_box(arena, Vector3(2.8, 0.03, 14.0), Vector3(lx, 0.02, -1.5), Vector3.ZERO, stone_tile, false)
 
-	# Subtle firing-lane guide lines on the courtyard floor
-	for gx in [-6.3, -2.1, 2.1, 6.3]:
-		_add_static_box(arena, Vector3(0.08, 0.02, 16.0), Vector3(gx, 0.01, -1.0), Vector3.ZERO, lane_glow, false)
-	for gz in [-4.0, 0.0, 4.0]:
-		_add_static_box(arena, Vector3(20.0, 0.02, 0.08), Vector3(0.0, 0.01, gz), Vector3.ZERO, lane_glow, false)
+	# Player timber shooting deck & warm terracotta defense barricade line at z = 3.6
+	_add_static_box(arena, Vector3(16.0, 0.18, 5.5), Vector3(0, 0.09, 6.8), Vector3.ZERO, timber_mat, true)
+	_add_static_box(arena, Vector3(15.2, 0.52, 0.38), Vector3(0, 0.26, 3.6), Vector3.ZERO, wall_cream, false)
+	_add_static_box(arena, Vector3(15.4, 0.12, 0.46), Vector3(0, 0.56, 3.6), Vector3.ZERO, terra_mat, false)
 
+	# Practice Gallery terrace at north end
+	_add_static_box(arena, Vector3(20.0, 0.20, 6.0), Vector3(0, 0.10, -13.5), Vector3.ZERO, stone_tile, true)
+
+	# Low warm limestone garden wall & timber pergola posts around courtyard
 	var oct_r := 18.5
 	for i in range(8):
 		var ang_deg := float(i) * 45.0
 		var ang_rad := deg_to_rad(ang_deg)
 		var wx := sin(ang_rad) * oct_r
 		var wz := cos(ang_rad) * oct_r
-		_add_static_box(arena, Vector3(15.8, 4.2, 0.8), Vector3(wx, 2.1, wz), Vector3(0, ang_deg, 0), wall_mat, true)
-		_add_static_box(arena, Vector3(15.8, 0.18, 0.92), Vector3(wx, 4.25, wz), Vector3(0, ang_deg, 0), gold_trim, false)
-
-		var inward := 0.972
-		_add_static_box(arena, Vector3(15.0, 0.11, 0.12), Vector3(wx * inward, 3.65, wz * inward), Vector3(0, ang_deg, 0), fr_blue, false)
-		_add_static_box(arena, Vector3(15.0, 0.11, 0.12), Vector3(wx * inward, 3.45, wz * inward), Vector3(0, ang_deg, 0), fr_white, false)
-		_add_static_box(arena, Vector3(15.0, 0.11, 0.12), Vector3(wx * inward, 3.25, wz * inward), Vector3(0, ang_deg, 0), fr_red, false)
+		_add_static_box(arena, Vector3(15.8, 2.2, 0.75), Vector3(wx, 1.1, wz), Vector3(0, ang_deg, 0), wall_cream, true)
+		_add_static_box(arena, Vector3(16.0, 0.24, 0.92), Vector3(wx, 2.30, wz), Vector3(0, ang_deg, 0), terra_mat, false)
 
 		var c_ang := deg_to_rad(ang_deg + 22.5)
 		var cx := sin(c_ang) * (oct_r - 0.3)
 		var cz := cos(c_ang) * (oct_r - 0.3)
-		_add_static_box(arena, Vector3(0.95, 5.0, 0.95), Vector3(cx, 2.5, cz), Vector3(0, ang_deg + 22.5, 0), pillar_mat, true)
+		_add_static_box(arena, Vector3(0.65, 3.4, 0.65), Vector3(cx, 1.7, cz), Vector3(0, ang_deg + 22.5, 0), timber_mat, true)
+		_add_static_box(arena, Vector3(0.85, 0.22, 0.85), Vector3(cx, 3.5, cz), Vector3(0, ang_deg + 22.5, 0), terra_mat, false)
+
+	# Lush stylized park trees surrounding the courtyard wall
+	var tree_spots := [
+		Vector3(-14.5, 0, -16.5), Vector3(-7.5, 0, -19.5), Vector3(0.0, 0, -20.5),
+		Vector3(7.5, 0, -19.5), Vector3(14.5, 0, -16.5),
+		Vector3(-19.5, 0, -6.0), Vector3(19.5, 0, -6.0),
+		Vector3(-19.0, 0, 4.0), Vector3(19.0, 0, 4.0),
+	]
+	for idx in range(tree_spots.size()):
+		var lmat := leaf_mat if (idx % 2 == 0) else leaf_light
+		var sc := 1.05 + float(idx % 3) * 0.16
+		_add_park_tree(arena, tree_spots[idx], sc, timber_mat, lmat)
 
 	gallery_sign = Label3D.new()
 	gallery_sign.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
-	gallery_sign.text = "3D PRACTICE GALLERY (STAGES 1–9)  •  SHOOT ANY OBJECT TO HEAR IT"
-	gallery_sign.position = Vector3(0, 3.85, -15.2)
-	gallery_sign.font_size = 42
-	gallery_sign.modulate = Color(1.0, 0.92, 0.38)
+	gallery_sign.text = "PRACTICE GALLERY (STAGES 1–9)  •  SHOOT ANY OBJECT TO HEAR IT"
+	gallery_sign.position = Vector3(0, 4.45, -15.5)
+	gallery_sign.font_size = 38
+	gallery_sign.modulate = Color(0.99, 0.94, 0.78)
 	gallery_sign.outline_size = 12
+	gallery_sign.outline_modulate = Color(0.18, 0.11, 0.06, 0.95)
+	gallery_sign.visible = false
 	arena.add_child(gallery_sign)
 
 
@@ -337,23 +381,23 @@ func _build_ui() -> void:
 	hover_info_lbl.text = ""
 	hover_info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hover_info_lbl.add_theme_font_size_override("font_size", 16)
-	hover_info_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.38))
-	hover_info_lbl.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.10))
+	hover_info_lbl.add_theme_color_override("font_color", Color(1.0, 0.94, 0.52))
+	hover_info_lbl.add_theme_color_override("font_outline_color", Color(0.14, 0.08, 0.04))
 	hover_info_lbl.add_theme_constant_override("outline_size", 6)
 	hover_info_lbl.set_anchors_preset(Control.PRESET_CENTER)
 	hover_info_lbl.position = Vector2(-280, -212)
 	hover_info_lbl.size = Vector2(560, 32)
 	hud_root.add_child(hover_info_lbl)
 
-	# 2. Top-Center Mission Prompt Banner
+	# 2. Top-Center Compact Arcade Prompt Banner (Warm Espresso & Gold)
 	var radio_panel := PanelContainer.new()
 	radio_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.06, 0.11, 0.22, 0.93), Color(0.28, 0.84, 1.0, 0.95), 14, 2)
+		_make_panel_style(Color(0.15, 0.11, 0.08, 0.94), Color(0.90, 0.68, 0.28, 0.96), 14, 2)
 	)
 	radio_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	radio_panel.position = Vector2(-410, 10)
-	radio_panel.custom_minimum_size = Vector2(820, 120)
+	radio_panel.position = Vector2(-360, 10)
+	radio_panel.custom_minimum_size = Vector2(720, 106)
 	radio_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(radio_panel)
 
@@ -362,13 +406,13 @@ func _build_ui() -> void:
 	radio_panel.add_child(rv)
 
 	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 12)
+	top_row.add_theme_constant_override("separation", 10)
 	rv.add_child(top_row)
 
 	speaker_lbl = Label.new()
-	speaker_lbl.text = "♪ VOICE: CMDT. HENRI"
+	speaker_lbl.text = "♪ FRENCH AUDIO"
 	speaker_lbl.add_theme_font_size_override("font_size", 13)
-	speaker_lbl.add_theme_color_override("font_color", Color(0.45, 0.92, 1.0))
+	speaker_lbl.add_theme_color_override("font_color", Color(0.98, 0.82, 0.42))
 	top_row.add_child(speaker_lbl)
 
 	var wave_box := HBoxContainer.new()
@@ -381,7 +425,7 @@ func _build_ui() -> void:
 		bar_wrap.custom_minimum_size = Vector2(5, 18)
 		wave_box.add_child(bar_wrap)
 		var bar := ColorRect.new()
-		bar.color = Color(0.28, 1.0, 0.72)
+		bar.color = Color(0.98, 0.78, 0.28)
 		bar.position = Vector2(0, 7)
 		bar.size = Vector2(5, 4)
 		bar_wrap.add_child(bar)
@@ -392,25 +436,25 @@ func _build_ui() -> void:
 	top_row.add_child(spacer)
 
 	mode_tag_lbl = Label.new()
-	mode_tag_lbl.text = "STAGE 1 (A1) • STEP 1: LEARN & SHOOT"
+	mode_tag_lbl.text = "STAGE 1 • LEVEL 1: NEW WORD"
 	mode_tag_lbl.add_theme_font_size_override("font_size", 13)
-	mode_tag_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.30))
+	mode_tag_lbl.add_theme_color_override("font_color", Color(0.68, 0.96, 0.62))
 	top_row.add_child(mode_tag_lbl)
 
 	prompt_main_lbl = Label.new()
-	prompt_main_lbl.text = "Ready for Mission"
+	prompt_main_lbl.text = "Ready"
 	prompt_main_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_main_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_main_lbl.add_theme_font_size_override("font_size", 21)
-	prompt_main_lbl.add_theme_color_override("font_color", Color(0.98, 0.99, 1.0))
+	prompt_main_lbl.add_theme_font_size_override("font_size", 24)
+	prompt_main_lbl.add_theme_color_override("font_color", Color(1.0, 0.97, 0.90))
 	rv.add_child(prompt_main_lbl)
 
 	prompt_sub_lbl = Label.new()
 	prompt_sub_lbl.text = ""
 	prompt_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_sub_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_sub_lbl.add_theme_font_size_override("font_size", 13)
-	prompt_sub_lbl.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0))
+	prompt_sub_lbl.add_theme_font_size_override("font_size", 14)
+	prompt_sub_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.65))
 	rv.add_child(prompt_sub_lbl)
 
 	timer_bar = ProgressBar.new()
@@ -420,20 +464,20 @@ func _build_ui() -> void:
 	timer_bar.value = 100.0
 	timer_bar.custom_minimum_size = Vector2(0, 7)
 	var tb_fill := StyleBoxFlat.new()
-	tb_fill.bg_color = Color(0.25, 0.92, 0.72)
+	tb_fill.bg_color = Color(0.95, 0.72, 0.24)
 	tb_fill.set_corner_radius_all(3)
 	timer_bar.add_theme_stylebox_override("fill", tb_fill)
 	rv.add_child(timer_bar)
 
-	# 3. Feedback Banner (Hit / Mistake Coaching)
+	# 3. Feedback Banner (Only shown when paused on a mistake so text never flies by unread!)
 	feedback_banner = PanelContainer.new()
 	feedback_banner.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.06, 0.14, 0.22, 0.95), Color(0.32, 1.0, 0.68, 0.95), 10, 2)
+		_make_panel_style(Color(0.20, 0.09, 0.07, 0.96), Color(0.96, 0.76, 0.25, 0.96), 10, 2)
 	)
 	feedback_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	feedback_banner.position = Vector2(-390, 138)
-	feedback_banner.custom_minimum_size = Vector2(780, 42)
+	feedback_banner.position = Vector2(-360, 124)
+	feedback_banner.custom_minimum_size = Vector2(720, 40)
 	feedback_banner.visible = false
 	feedback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(feedback_banner)
@@ -444,14 +488,14 @@ func _build_ui() -> void:
 	feedback_lbl.add_theme_font_size_override("font_size", 15)
 	feedback_banner.add_child(feedback_lbl)
 
-	# 4. Top-Left Score & Streak Panel
+	# 4. Top-Left Score, Combo & Defense Barricade Hearts
 	var stats_panel := PanelContainer.new()
 	stats_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.06, 0.11, 0.22, 0.90), Color(0.28, 0.62, 0.96, 0.85), 12, 2)
+		_make_panel_style(Color(0.15, 0.11, 0.08, 0.92), Color(0.86, 0.64, 0.26, 0.90), 12, 2)
 	)
 	stats_panel.position = Vector2(14, 10)
-	stats_panel.custom_minimum_size = Vector2(210, 106)
+	stats_panel.custom_minimum_size = Vector2(215, 104)
 	stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(stats_panel)
 
@@ -460,21 +504,21 @@ func _build_ui() -> void:
 	stats_panel.add_child(sv)
 
 	wave_lbl = Label.new()
-	wave_lbl.text = "ROUND 1  •  SHOT 1/6"
+	wave_lbl.text = "ROUND 1  •  TARGET 1/6"
 	wave_lbl.add_theme_font_size_override("font_size", 14)
-	wave_lbl.add_theme_color_override("font_color", Color(0.62, 0.90, 1.0))
+	wave_lbl.add_theme_color_override("font_color", Color(0.98, 0.90, 0.72))
 	sv.add_child(wave_lbl)
 
 	score_lbl = Label.new()
 	score_lbl.text = "SCORE: 0  (STREAK x1)"
 	score_lbl.add_theme_font_size_override("font_size", 16)
-	score_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
+	score_lbl.add_theme_color_override("font_color", Color(1.0, 0.84, 0.28))
 	sv.add_child(score_lbl)
 
 	var sh_lbl := Label.new()
-	sh_lbl.text = "SHIELD INTEGRITY"
+	sh_lbl.text = "BARRICADE HEALTH"
 	sh_lbl.add_theme_font_size_override("font_size", 11)
-	sh_lbl.add_theme_color_override("font_color", Color(0.75, 0.84, 0.96))
+	sh_lbl.add_theme_color_override("font_color", Color(0.92, 0.82, 0.68))
 	sv.add_child(sh_lbl)
 
 	shield_bar = ProgressBar.new()
@@ -483,28 +527,28 @@ func _build_ui() -> void:
 	shield_bar.value = 100.0
 	shield_bar.custom_minimum_size = Vector2(0, 10)
 	var sb_fill := StyleBoxFlat.new()
-	sb_fill.bg_color = Color(0.24, 0.95, 0.62)
+	sb_fill.bg_color = Color(0.32, 0.88, 0.46)
 	sb_fill.set_corner_radius_all(4)
 	shield_bar.add_theme_stylebox_override("fill", sb_fill)
 	sv.add_child(shield_bar)
 
-	# 5. Bottom Controls Legend Bar
+	# 5. Bottom Compact Hotkeys Pill
 	var bot_panel := PanelContainer.new()
 	bot_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.05, 0.09, 0.18, 0.90), Color(0.24, 0.52, 0.86, 0.75), 10, 1)
+		_make_panel_style(Color(0.14, 0.10, 0.07, 0.90), Color(0.76, 0.56, 0.24, 0.80), 10, 1)
 	)
 	bot_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bot_panel.position = Vector2(-530, -46)
-	bot_panel.custom_minimum_size = Vector2(1060, 36)
+	bot_panel.position = Vector2(-460, -44)
+	bot_panel.custom_minimum_size = Vector2(920, 34)
 	bot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(bot_panel)
 
 	hotkeys_lbl = Label.new()
-	hotkeys_lbl.text = "[Mouse + Click] or [1-4] Shoot Target   •   [E] Replay Audio   •   [R] Slow Audio   •   [H] Show Hint   •   [Tab] Word List   •   [G] 3D Gallery   •   [Esc] Menu"
+	hotkeys_lbl.text = "[Click] or [1-4] Shoot   •   [WASD] Move   •   [E] Replay Audio   •   [H] Hint   •   [Tab] Word Book   •   [Esc] Menu"
 	hotkeys_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hotkeys_lbl.add_theme_font_size_override("font_size", 13)
-	hotkeys_lbl.add_theme_color_override("font_color", Color(0.88, 0.95, 1.0))
+	hotkeys_lbl.add_theme_color_override("font_color", Color(0.98, 0.93, 0.82))
 	bot_panel.add_child(hotkeys_lbl)
 
 	_build_menu_overlay()
@@ -516,49 +560,43 @@ func _build_menu_overlay() -> void:
 	menu_panel = PanelContainer.new()
 	menu_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.06, 0.10, 0.20, 0.95), Color(0.28, 0.84, 1.0, 0.95), 16, 2)
+		_make_panel_style(Color(0.15, 0.11, 0.08, 0.96), Color(0.92, 0.70, 0.28, 0.98), 18, 3)
 	)
 	menu_panel.set_anchors_preset(Control.PRESET_CENTER)
-	menu_panel.position = Vector2(-380, -265)
-	menu_panel.custom_minimum_size = Vector2(760, 530)
+	menu_panel.position = Vector2(-280, -185)
+	menu_panel.custom_minimum_size = Vector2(560, 370)
 	ui_layer.add_child(menu_panel)
 
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 11)
+	vb.add_theme_constant_override("separation", 12)
 	menu_panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "FRANC-TIREUR : OPÉRATION ÉCHO"
+	title.text = "FRANC-TIREUR"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0.38, 0.94, 1.0))
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36))
 	vb.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "3D French Target Shooter  •  Learn Vocabulary, Listening & Grammar (CEFR A1 → B1)"
+	subtitle.text = "French Target Arcade  •  Stop the targets before they reach your barricade!"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 15)
-	subtitle.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+	subtitle.add_theme_font_size_override("font_size", 14)
+	subtitle.add_theme_color_override("font_color", Color(0.96, 0.90, 0.78))
 	vb.add_child(subtitle)
-
-	var desc := Label.new()
-	desc.text = (
-		"HOW TO PLAY:\n"
-		+ "1. LEARN (Step 1): New French words appear with a green target ring, English translation, and pronunciation guide.\n"
-		+ "2. RECALL (Step 2): The green ring disappears — read/hear the French word and shoot the matching 3D object!\n"
-		+ "3. MASTER (Step 3+): Audio-only commands, A2 3D Size/Speed challenges (biggest/fastest), and B1 Grammar Crystals!\n"
-		+ "★ TIP: Aim & Left-Click to shoot, OR press [1] [2] [3] [4] to quick-shoot targets from left to right!"
-	)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.add_theme_font_size_override("font_size", 13)
-	desc.add_theme_color_override("font_color", Color(0.78, 0.90, 1.0))
-	vb.add_child(desc)
 
 	menu_stats_lbl = Label.new()
 	menu_stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	menu_stats_lbl.add_theme_font_size_override("font_size", 14)
-	menu_stats_lbl.add_theme_color_override("font_color", Color(0.35, 1.0, 0.72))
+	menu_stats_lbl.add_theme_font_size_override("font_size", 15)
+	menu_stats_lbl.add_theme_color_override("font_color", Color(0.52, 0.96, 0.62))
 	vb.add_child(menu_stats_lbl)
+
+	var start_btn := Button.new()
+	start_btn.text = "▶ PLAY STAGE 1"
+	start_btn.custom_minimum_size = Vector2(0, 56)
+	start_btn.add_theme_font_size_override("font_size", 20)
+	start_btn.pressed.connect(_on_start_mission_pressed)
+	vb.add_child(start_btn)
 
 	sector_btn = Button.new()
 	sector_btn.custom_minimum_size = Vector2(0, 40)
@@ -566,46 +604,34 @@ func _build_menu_overlay() -> void:
 	sector_btn.pressed.connect(_on_cycle_sector)
 	vb.add_child(sector_btn)
 
+	# Keep l1_btn hidden or compact in advanced options so menu stays ultra-clean
 	l1_btn = Button.new()
-	l1_btn.custom_minimum_size = Vector2(0, 38)
-	l1_btn.add_theme_font_size_override("font_size", 14)
-	l1_btn.pressed.connect(_on_cycle_l1_mode)
+	l1_btn.visible = false
 	vb.add_child(l1_btn)
 
-	var btn_row := HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 12)
-	vb.add_child(btn_row)
-
-	var start_btn := Button.new()
-	start_btn.text = "▶ PLAY ROUND (6 SHOTS)"
-	start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	start_btn.custom_minimum_size = Vector2(0, 52)
-	start_btn.add_theme_font_size_override("font_size", 18)
-	start_btn.pressed.connect(_on_start_mission_pressed)
-	btn_row.add_child(start_btn)
-
-	var gal_btn := Button.new()
-	gal_btn.text = "◈ 3D PRACTICE GALLERY (STAGES 1–9)"
-	gal_btn.custom_minimum_size = Vector2(275, 52)
-	gal_btn.add_theme_font_size_override("font_size", 14)
-	gal_btn.pressed.connect(_on_enter_gallery_pressed)
-	btn_row.add_child(gal_btn)
-
 	var bot_row := HBoxContainer.new()
-	bot_row.add_theme_constant_override("separation", 12)
+	bot_row.add_theme_constant_override("separation", 10)
 	vb.add_child(bot_row)
 
 	var lex_btn := Button.new()
-	lex_btn.text = "✦ WORD & GRAMMAR CODEX (45 WORDS + 16 GRAMMAR RULES) [Tab]"
+	lex_btn.text = "Word Book (45 Words) [Tab]"
 	lex_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lex_btn.custom_minimum_size = Vector2(0, 38)
+	lex_btn.custom_minimum_size = Vector2(0, 40)
 	lex_btn.add_theme_font_size_override("font_size", 13)
 	lex_btn.pressed.connect(func(): _toggle_lexicon(true))
 	bot_row.add_child(lex_btn)
 
+	var gal_btn := Button.new()
+	gal_btn.text = "Practice Range [G]"
+	gal_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gal_btn.custom_minimum_size = Vector2(0, 40)
+	gal_btn.add_theme_font_size_override("font_size", 13)
+	gal_btn.pressed.connect(_on_enter_gallery_pressed)
+	bot_row.add_child(gal_btn)
+
 	var rst_btn := Button.new()
-	rst_btn.text = "↺ Reset Progress"
-	rst_btn.custom_minimum_size = Vector2(155, 38)
+	rst_btn.text = "↺ Reset"
+	rst_btn.custom_minimum_size = Vector2(90, 40)
 	rst_btn.add_theme_font_size_override("font_size", 13)
 	rst_btn.pressed.connect(func():
 		audio.play_sfx("click")
@@ -619,11 +645,11 @@ func _build_summary_overlay() -> void:
 	summary_panel = PanelContainer.new()
 	summary_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.06, 0.11, 0.21, 0.96), Color(0.32, 1.0, 0.68, 0.95), 16, 2)
+		_make_panel_style(Color(0.15, 0.11, 0.08, 0.97), Color(0.45, 0.92, 0.52, 0.96), 16, 2)
 	)
 	summary_panel.set_anchors_preset(Control.PRESET_CENTER)
-	summary_panel.position = Vector2(-310, -195)
-	summary_panel.custom_minimum_size = Vector2(620, 390)
+	summary_panel.position = Vector2(-260, -170)
+	summary_panel.custom_minimum_size = Vector2(520, 340)
 	summary_panel.visible = false
 	ui_layer.add_child(summary_panel)
 
@@ -632,34 +658,28 @@ func _build_summary_overlay() -> void:
 	summary_panel.add_child(vb)
 
 	var hd := Label.new()
-	hd.text = "✓ ROUND COMPLETE — PROGRESS REPORT"
+	hd.text = "✓ ROUND COMPLETE!"
 	hd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hd.add_theme_font_size_override("font_size", 23)
-	hd.add_theme_color_override("font_color", Color(0.35, 1.0, 0.72))
+	hd.add_theme_font_size_override("font_size", 26)
+	hd.add_theme_color_override("font_color", Color(0.52, 0.98, 0.62))
 	vb.add_child(hd)
 
 	summary_lbl = Label.new()
 	summary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	summary_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary_lbl.add_theme_font_size_override("font_size", 15)
+	summary_lbl.add_theme_font_size_override("font_size", 16)
+	summary_lbl.add_theme_color_override("font_color", Color(0.98, 0.94, 0.84))
 	vb.add_child(summary_lbl)
 
 	var next_btn := Button.new()
-	next_btn.text = "▶ NEXT ROUND (CONTINUE)"
-	next_btn.custom_minimum_size = Vector2(0, 48)
-	next_btn.add_theme_font_size_override("font_size", 17)
-	next_btn.pressed.connect(func():
-		audio.play_sfx("click")
-		summary_panel.visible = false
-		hud_root.visible = true
-		wave_number += 1
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		_begin_wave()
-	)
+	next_btn.text = "▶ NEXT ROUND  [Press Space or Click]"
+	next_btn.custom_minimum_size = Vector2(0, 52)
+	next_btn.add_theme_font_size_override("font_size", 18)
+	next_btn.pressed.connect(_continue_to_next_round)
 	vb.add_child(next_btn)
 
 	var menu_b := Button.new()
-	menu_b.text = "Return to Menu / Change Stage or Mode"
+	menu_b.text = "Back to Menu [Esc]"
 	menu_b.custom_minimum_size = Vector2(0, 38)
 	menu_b.pressed.connect(func():
 		audio.play_sfx("click")
@@ -669,11 +689,23 @@ func _build_summary_overlay() -> void:
 	vb.add_child(menu_b)
 
 
+func _continue_to_next_round() -> void:
+	audio.play_sfx("click")
+	summary_panel.visible = false
+	hud_root.visible = true
+	wave_number += 1
+	player.visible = true
+	player.camera.current = true
+	player.controls_enabled = true
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_begin_wave()
+
+
 func _build_lexicon_overlay() -> void:
 	lexicon_panel = PanelContainer.new()
 	lexicon_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.05, 0.08, 0.16, 0.97), Color(0.32, 0.85, 1.0, 0.95), 14, 2)
+		_make_panel_style(Color(0.14, 0.10, 0.07, 0.98), Color(0.90, 0.68, 0.28, 0.96), 14, 2)
 	)
 	lexicon_panel.position = Vector2(50, 40)
 	lexicon_panel.size = Vector2(1180, 640)
@@ -690,23 +722,22 @@ func _build_lexicon_overlay() -> void:
 	vb.add_child(top)
 
 	lexicon_header_lbl = Label.new()
-	lexicon_header_lbl.text = "WORD & GRAMMAR CODEX (A1–B1) — Click [♪] to hear pronunciation"
+	lexicon_header_lbl.text = "FRENCH WORD BOOK (45 Words) — Click [♪] to hear native pronunciation"
 	lexicon_header_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lexicon_header_lbl.add_theme_font_size_override("font_size", 14)
-	lexicon_header_lbl.add_theme_color_override("font_color", Color(0.42, 0.92, 1.0))
+	lexicon_header_lbl.add_theme_font_size_override("font_size", 15)
+	lexicon_header_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.38))
 	top.add_child(lexicon_header_lbl)
 
 	for tab_spec in [
 		["ALL", "All (45)"],
-		["A1", "A1 (20)"],
-		["A2", "A2 (15)"],
-		["B1", "B1 (10)"],
-		["GRAM", "Grammar (16)"],
+		["A1", "Stages 1–4 (20)"],
+		["A2", "Stages 5–7 (15)"],
+		["B1", "Stages 8–9 (10)"],
 	]:
 		var tb := Button.new()
 		var t_code: String = tab_spec[0]
 		tb.text = tab_spec[1]
-		tb.custom_minimum_size = Vector2(88, 30)
+		tb.custom_minimum_size = Vector2(110, 30)
 		tb.add_theme_font_size_override("font_size", 12)
 		tb.pressed.connect(func():
 			audio.play_sfx("click")
@@ -738,68 +769,18 @@ func _populate_lexicon_grid() -> void:
 	for ch in lexicon_grid.get_children():
 		ch.queue_free()
 
-	var tier_names := ["Step 1: New", "Step 2: Recall", "Step 3: Audio Only", "Step 4: Context", "★ Mastered"]
+	var tier_names := ["Level 1: New", "Level 2: Read & Shoot", "Level 3: Audio Only", "Level 4: Phrases", "★ Mastered"]
 	var tier_cols := [
-		Color(0.55, 0.65, 0.78),
-		Color(0.38, 0.80, 1.0),
-		Color(0.75, 0.55, 1.0),
-		Color(1.0, 0.82, 0.25),
-		Color(0.30, 1.0, 0.68),
+		Color(0.75, 0.68, 0.58),
+		Color(0.98, 0.82, 0.36),
+		Color(0.98, 0.64, 0.28),
+		Color(0.62, 0.92, 0.48),
+		Color(0.36, 0.98, 0.58),
 	]
-
-	if lexicon_tab == "GRAM":
-		lexicon_grid.columns = 2
-		for g in VocabData.GRAMMAR_BREACHES:
-			var gid: String = g["id"]
-			var gc: Dictionary = srs.grammar_cards[gid]
-			var t_idx := clampi(int(gc["tier"]), 0, 4)
-			var card := PanelContainer.new()
-			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			card.custom_minimum_size = Vector2(520, 118)
-			card.add_theme_stylebox_override(
-				"panel",
-				_make_panel_style(Color(0.09, 0.08, 0.22, 0.95), tier_cols[t_idx], 8, 2)
-			)
-			lexicon_grid.add_child(card)
-
-			var cv := VBoxContainer.new()
-			cv.add_theme_constant_override("separation", 3)
-			card.add_child(cv)
-
-			var r1 := HBoxContainer.new()
-			cv.add_child(r1)
-			var w_lbl := Label.new()
-			w_lbl.text = "[%s] %s  →  « %s »" % [g["cefr"], g["category"], g["correct"]]
-			w_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			w_lbl.add_theme_font_size_override("font_size", 14)
-			w_lbl.add_theme_color_override("font_color", Color(0.92, 0.82, 1.0))
-			r1.add_child(w_lbl)
-
-			var play_b := Button.new()
-			play_b.text = "♪ Listen"
-			play_b.add_theme_font_size_override("font_size", 12)
-			var aud_f: String = g["audio"]
-			play_b.pressed.connect(func(): audio.play_voice(aud_f))
-			r1.add_child(play_b)
-
-			var s_lbl := Label.new()
-			s_lbl.text = "%s   (\"%s\")" % [g["sentence_full"], g["en"]]
-			s_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			s_lbl.add_theme_font_size_override("font_size", 12)
-			s_lbl.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
-			cv.add_child(s_lbl)
-
-			var rl_lbl := Label.new()
-			rl_lbl.text = "%s   |   ✓%d  ✗%d" % [g["rule"], int(gc["correct"]), int(gc["wrong"])]
-			rl_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			rl_lbl.add_theme_font_size_override("font_size", 11)
-			rl_lbl.add_theme_color_override("font_color", Color(0.68, 0.86, 0.98))
-			cv.add_child(rl_lbl)
-		return
 
 	lexicon_grid.columns = 4
 	for item in VocabData.ITEMS:
-		if lexicon_tab != "ALL" and not String(item["cefr"]).begins_with(lexicon_tab):
+		if lexicon_tab != "ALL" and lexicon_tab != "GRAM" and not String(item["cefr"]).begins_with(lexicon_tab):
 			continue
 		var vid: String = item["id"]
 		var c: Dictionary = srs.cards[vid]
@@ -809,7 +790,7 @@ func _populate_lexicon_grid() -> void:
 		card.custom_minimum_size = Vector2(228, 102)
 		card.add_theme_stylebox_override(
 			"panel",
-			_make_panel_style(Color(0.08, 0.12, 0.21, 0.95), tier_cols[t_idx], 8, 2)
+			_make_panel_style(Color(0.20, 0.15, 0.11, 0.96), tier_cols[t_idx], 8, 2)
 		)
 		lexicon_grid.add_child(card)
 
@@ -820,11 +801,11 @@ func _populate_lexicon_grid() -> void:
 		var r1 := HBoxContainer.new()
 		cv.add_child(r1)
 		var w_lbl := Label.new()
-		w_lbl.text = "[%s] %s (%s)" % [item["cefr"], item["fr_def"], item["gender"]]
+		w_lbl.text = "%s  —  %s" % [item["fr_def"], item["en"]]
 		w_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		w_lbl.clip_text = true
-		w_lbl.add_theme_font_size_override("font_size", 13)
-		w_lbl.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
+		w_lbl.add_theme_font_size_override("font_size", 14)
+		w_lbl.add_theme_color_override("font_color", Color(1.0, 0.96, 0.88))
 		r1.add_child(w_lbl)
 
 		var play_b := Button.new()
@@ -836,16 +817,15 @@ func _populate_lexicon_grid() -> void:
 		r1.add_child(play_b)
 
 		var en_lbl := Label.new()
-		en_lbl.text = "%s  •  %s" % [item["en"], item["ipa"]]
+		en_lbl.text = "Sounds like: \"%s\"" % item["ipa"]
 		en_lbl.clip_text = true
-		en_lbl.add_theme_font_size_override("font_size", 11)
-		en_lbl.add_theme_color_override("font_color", Color(0.68, 0.84, 0.98))
+		en_lbl.add_theme_font_size_override("font_size", 12)
+		en_lbl.add_theme_color_override("font_color", Color(0.98, 0.84, 0.46))
 		cv.add_child(en_lbl)
 
 		var st_lbl := Label.new()
 		var ok_n := int(c["correct"])
-		var er_n := int(c["wrong"])
-		st_lbl.text = "%s  |  ✓%d  ✗%d" % [tier_names[t_idx] if bool(c["seen"]) else "Unseen", ok_n, er_n]
+		st_lbl.text = "Stage %d  •  %s  (✓%d)" % [int(item["sector"]) + 1, tier_names[t_idx] if bool(c["seen"]) else "Not seen yet", ok_n]
 		st_lbl.add_theme_font_size_override("font_size", 11)
 		st_lbl.add_theme_color_override("font_color", tier_cols[t_idx])
 		cv.add_child(st_lbl)
@@ -862,10 +842,14 @@ func _toggle_lexicon(force_state: Variant = null) -> void:
 		hud_root.visible = false
 		menu_panel.visible = false
 		summary_panel.visible = false
+		drones_root.visible = false
+		pedestals_root.visible = false
 		_populate_lexicon_grid()
 		player.controls_enabled = false
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
+		drones_root.visible = (state in [GameState.CALIBRATION, GameState.COMBAT])
+		pedestals_root.visible = (state in [GameState.MENU, GameState.GALLERY])
 		if state == GameState.MENU:
 			menu_panel.visible = true
 		elif state == GameState.WAVE_SUMMARY:
@@ -899,45 +883,28 @@ func _enter_menu() -> void:
 
 func _refresh_menu_labels() -> void:
 	var st := srs.get_summary_stats()
-	menu_stats_lbl.text = "Campaign Stage %d/9  •  Words Learned: %d/%d  •  Audio-Ready: %d  •  Grammar: %d/%d  •  Accuracy: %.0f%%" % [
-		st["active_stage"], st["seen"], st["total_words"], st["listening_ready"], st["gram_seen"], st["gram_total"], st["accuracy"]
+	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
+	var s_info := VocabData.SECTORS[act_s]
+	menu_stats_lbl.text = "Stage %d of 9: %s   •   Words Learned: %d / %d" % [
+		act_s + 1, s_info["name_en"], st["seen"], st["total_words"]
 	]
 	match srs.sector_filter:
 		-1:
-			var act_s := srs.get_active_campaign_sector()
-			var s_info := VocabData.SECTORS[act_s]
-			sector_btn.text = "◈ Mode: Guided Campaign (Currently on Stage %d/9: %s [%s]) — Click to change" % [
-				act_s + 1, s_info["name_en"], s_info["cefr"]
+			sector_btn.text = "◈ Stage Mode: Guided Campaign (Stage %d: %s) — Click to Switch Stage" % [
+				act_s + 1, s_info["name_en"]
 			]
-		-2:
-			sector_btn.text = "◈ Mode: CEFR A1 Beginner Track (Stages 1–4 — 20 Core Words)"
-		-3:
-			sector_btn.text = "◈ Mode: CEFR A2 Everyday Track (Stages 5–7 + 3D Size/Speed Challenges + Grammar)"
-		-4:
-			sector_btn.text = "◈ Mode: CEFR B1 Intermediate Track (Stages 8–9 + DELF Dialogues + Subjunctive)"
 		-5:
-			sector_btn.text = "◈ Special Mode (A2): 3D Size, Speed & Position Challenges (Biggest, Fastest, Middle...)"
-		-6:
-			sector_btn.text = "◈ Special Mode (DELF A2–B1): Situational Listening Dialogues (16 Scenarios)"
-		-7:
-			sector_btn.text = "◈ Special Mode (A2–B1): Holographic Grammar & Phonetic Crystals (16 Rules)"
+			sector_btn.text = "◈ Special Arcade Mode: 3D Size, Speed & Position Challenges"
 		_:
-			var s_info := VocabData.SECTORS[clampi(srs.sector_filter, 0, VocabData.SECTORS.size() - 1)]
-			sector_btn.text = "◈ Stage %d (%s): %s  •  %s" % [
-				srs.sector_filter + 1, s_info["cefr"], s_info["name_en"], s_info["name_fr"]
+			var sel_info := VocabData.SECTORS[clampi(srs.sector_filter, 0, VocabData.SECTORS.size() - 1)]
+			sector_btn.text = "◈ Selected Stage %d: %s (%s) — Click to Switch Stage" % [
+				srs.sector_filter + 1, sel_info["name_en"], sel_info["name_fr"]
 			]
-
-	var l1_names := [
-		"✦ English Support: Smart Adaptive (Shows English on new words, fades as you master them)",
-		"✦ English Support: Always Show English Translation & Pronunciation Tips",
-		"✦ English Support: Hardcore 100% French Immersion",
-	]
-	l1_btn.text = l1_names[srs.l1_mode]
 
 
 func _on_cycle_sector() -> void:
 	audio.play_sfx("click")
-	var order := [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, -5, -6, -7, -2, -3, -4]
+	var order := [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, -5]
 	var cur_idx := order.find(srs.sector_filter)
 	srs.sector_filter = order[(cur_idx + 1) % order.size()]
 	srs.save_progress()
@@ -1070,6 +1037,9 @@ func _start_combat_wave() -> void:
 	state = GameState.COMBAT
 	prompt_in_wave = 0
 	feedback_banner.visible = false
+	player.visible = true
+	player.camera.current = true
+	player.controls_enabled = true
 	_next_combat_prompt()
 
 
@@ -1116,20 +1086,47 @@ func _spawn_vocab_drones(spec: Dictionary) -> void:
 
 	var n := spawn_ids.size()
 	var xs3 := [-4.4, 0.0, 4.4]
-	var xs4 := [-6.3, -2.1, 2.1, 6.3]
+	var xs4 := [-6.2, -2.1, 2.1, 6.2]
 	for i in range(n):
 		var sx: float = xs3[i] if n == 3 else (xs4[i] if i < 4 else (float(i - 2) * 3.5))
-		var sz: float = -0.3 if (i % 2 == 0) else -0.9
-		var height := 2.18
+		var sz: float = -0.5 if tier == 0 else (-2.6 if (i % 2 == 0) else -3.4)
+		var height := 2.15
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		var mv := 0.25 if tier == 0 else (0.55 + float(mini(wave_number, 5)) * 0.05)
-		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, mv, 1.12)
-		# On Step 1 (Tier 0 — New Word), spotlight the target with a green ring & bilingual badge!
-		if tier == 0 and spawn_ids[i] == target_id:
-			var item := VocabData.get_by_id(target_id)
-			d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")))
+		var mv := 0.20 if tier == 0 else (0.65 + float(mini(wave_number, 5)) * 0.06)
+		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, mv, 1.15)
+		d.set_slot_badge(i + 1)
+		if tier == 0:
+			d.approach_speed = 0.0
+			if spawn_ids[i] == target_id:
+				var item := VocabData.get_by_id(target_id)
+				d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")), str(item.get("ipa", "")))
+		else:
+			d.approach_speed = 0.52 + float(mini(wave_number, 6)) * 0.06
+			d.defense_z = 3.2
+			d.reached_defense_line.connect(_on_drone_reached_defense_line)
 		active_drones.append(d)
+
+
+func _on_drone_reached_defense_line(drone: TargetDrone) -> void:
+	if state != GameState.COMBAT or not prompt_active:
+		return
+	var target_tag := str(current_spec.get("target_id", ""))
+	if drone.drone_tag == target_tag:
+		prompt_clean_try = false
+		combo = 0
+		shield_hp = maxf(10.0, shield_hp - 15.0)
+		audio.play_sfx("shield_hit", 0.01, -2.0)
+		_highlight_true_target(target_tag)
+		_play_slow_assist()
+		var item := VocabData.get_by_id(target_tag)
+		_show_feedback(
+			"! Barricade hit! Shoot the gold-highlighted target: %s (%s)" % [
+				item.get("fr_def", target_tag), item.get("en", "")
+			],
+			false
+		)
+		_update_stats_hud()
 
 
 func _spawn_scenario_drones(spec: Dictionary) -> void:
@@ -1143,21 +1140,25 @@ func _spawn_scenario_drones(spec: Dictionary) -> void:
 	spawn_ids.shuffle()
 
 	var n := spawn_ids.size()
-	var xs4 := [-6.3, -2.1, 2.1, 6.3]
+	var xs4 := [-6.2, -2.1, 2.1, 6.2]
 	for i in range(n):
 		var sx: float = xs4[i] if i < 4 else (float(i - 2) * 3.5)
-		var sz := -0.5 if (i % 2 == 0) else -1.1
-		var height := 2.20
+		var sz := -2.2 if (i % 2 == 0) else -3.0
+		var height := 2.18
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, 0.50, 1.12)
+		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, 0.55, 1.15)
+		d.set_slot_badge(i + 1)
+		d.approach_speed = 0.45
+		d.defense_z = 3.2
+		d.reached_defense_line.connect(_on_drone_reached_defense_line)
 		active_drones.append(d)
 
 
 func _spawn_grammar_drones(spec: Dictionary) -> void:
 	var opts: Array = spec["options"].duplicate()
 	opts.shuffle()
-	var xs := [-6.3, -2.1, 2.1, 6.3]
+	var xs := [-6.2, -2.1, 2.1, 6.2]
 	for i in range(opts.size()):
 		var opt_txt := str(opts[i])
 		var pos := Vector3(xs[i], 2.25, -0.5)
@@ -1171,7 +1172,7 @@ func _spawn_grammar_drones(spec: Dictionary) -> void:
 func _spawn_modifier_drones(spec: Dictionary) -> void:
 	var layout := str(spec["layout"])
 	var vid := str(spec["base_vocab_id"])
-	var xs4 := [-6.3, -2.1, 2.1, 6.3]
+	var xs4 := [-6.2, -2.1, 2.1, 6.2]
 	var target_slot := randi() % 4
 
 	if layout == "pos_left":
@@ -1184,9 +1185,10 @@ func _spawn_modifier_drones(spec: Dictionary) -> void:
 			var is_t := (i == 1)
 			var d := TargetDrone.new()
 			drones_root.add_child(d)
-			d.setup(vid, Vector3(xs3[i], 2.20, -0.5), player.global_position, 0.15, 1.12, "MOD_TARGET" if is_t else ("DECOY_%d" % i))
+			d.setup(vid, Vector3(xs3[i], 2.20, -0.5), player.global_position, 0.15, 1.15, "MOD_TARGET" if is_t else ("DECOY_%d" % i))
+			d.set_slot_badge(i + 1)
 			d.custom_ok_label = "+150  ✓ Au milieu (In the middle)!"
-			d.custom_wrong_label = "✗ On the side (shoot the MIDDLE one)!"
+			d.custom_wrong_label = "✗ Shoot the MIDDLE one!"
 			active_drones.append(d)
 		return
 
@@ -1196,38 +1198,38 @@ func _spawn_modifier_drones(spec: Dictionary) -> void:
 		var pos := Vector3(xs4[i], 2.20, -0.5)
 		var mv := 0.45
 		var sc := 1.0
-		var ok_lbl := "+150  ✓ Correct target!"
+		var ok_lbl := "+150  ✓ Correct!"
 		var err_lbl := "✗ Wrong target!"
 
 		match layout:
 			"scale_max":
 				sc = 1.65 if is_t else (0.64 + float(i) * 0.08)
 				mv = 0.35
-				ok_lbl = "+150  ✓ La plus grande (The biggest)!"
-				err_lbl = "✗ Too small (shoot the BIGGEST one)!"
+				ok_lbl = "+150  ✓ La plus grande (Biggest)!"
+				err_lbl = "✗ Shoot the BIGGEST one!"
 			"scale_min":
 				sc = 0.56 if is_t else (1.18 + float(i) * 0.10)
 				mv = 0.35
-				ok_lbl = "+150  ✓ Le plus petit (The smallest)!"
-				err_lbl = "✗ Too big (shoot the SMALLEST one)!"
+				ok_lbl = "+150  ✓ Le plus petit (Smallest)!"
+				err_lbl = "✗ Shoot the SMALLEST one!"
 			"speed_max":
 				mv = 2.60 if is_t else 0.18
-				ok_lbl = "+150  ✓ Le plus rapide (The fastest)!"
-				err_lbl = "✗ Too slow (shoot the FASTEST one)!"
+				ok_lbl = "+150  ✓ Le plus vite (Fastest)!"
+				err_lbl = "✗ Shoot the FASTEST one!"
 			"speed_zero":
 				mv = 0.0 if is_t else 1.65
-				ok_lbl = "+150  ✓ Immobile (Motionless)!"
-				err_lbl = "✗ Moving (shoot the MOTIONLESS one)!"
+				ok_lbl = "+150  ✓ Immobile (Standing still)!"
+				err_lbl = "✗ Shoot the one STANDING STILL!"
 			"height_max":
 				pos.y = 3.85 if is_t else 1.50
 				mv = 0.30
-				ok_lbl = "+150  ✓ Le plus haut (The highest)!"
-				err_lbl = "✗ Too low (shoot the HIGHEST one)!"
+				ok_lbl = "+150  ✓ Le plus haut (Highest)!"
+				err_lbl = "✗ Shoot the HIGHEST one!"
 			"height_min":
 				pos.y = 1.25 if is_t else 3.55
 				mv = 0.30
-				ok_lbl = "+150  ✓ Le plus bas (The lowest)!"
-				err_lbl = "✗ Too high (shoot the LOWEST one)!"
+				ok_lbl = "+150  ✓ Le plus bas (Lowest)!"
+				err_lbl = "✗ Shoot the LOWEST one!"
 			"pos_left":
 				mv = 0.12
 				ok_lbl = "+150  ✓ À gauche (Far left)!"
@@ -1239,13 +1241,13 @@ func _spawn_modifier_drones(spec: Dictionary) -> void:
 			"dist_min":
 				pos.z = 2.2 if is_t else -3.2
 				mv = 0.30
-				ok_lbl = "+150  ✓ Le plus proche (The closest)!"
-				err_lbl = "✗ Too far back (shoot the CLOSEST one)!"
+				ok_lbl = "+150  ✓ Le plus proche (Closest)!"
+				err_lbl = "✗ Shoot the CLOSEST one!"
 			"dist_max":
 				pos.z = -3.8 if is_t else 1.8
 				mv = 0.30
-				ok_lbl = "+150  ✓ La plus éloignée (The farthest)!"
-				err_lbl = "✗ Too close (shoot the FARTHEST one)!"
+				ok_lbl = "+150  ✓ La plus éloignée (Furthest)!"
+				err_lbl = "✗ Shoot the FURTHEST one!"
 			"big_stationary":
 				if is_t:
 					sc = 1.60
@@ -1256,19 +1258,20 @@ func _spawn_modifier_drones(spec: Dictionary) -> void:
 				else:
 					sc = 0.62
 					mv = 0.0
-				ok_lbl = "+150  ✓ Grand ET immobile (Big AND motionless)!"
-				err_lbl = "✗ Must be BOTH big and motionless!"
+				ok_lbl = "+150  ✓ Grand ET immobile!"
+				err_lbl = "✗ Must be BOTH big and still!"
 
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
 		d.setup(vid, pos, player.global_position, mv, sc, tag)
+		d.set_slot_badge(i + 1)
 		d.custom_ok_label = ok_lbl
 		d.custom_wrong_label = err_lbl
 		active_drones.append(d)
 
 
 func _refresh_prompt_hud() -> void:
-	speaker_lbl.text = "♪ VOICE: " + str(current_spec["speaker"])
+	speaker_lbl.text = "♪ FRENCH AUDIO"
 	mode_tag_lbl.text = str(current_spec["mode_tag"])
 
 	var ptype := str(current_spec.get("prompt_type", "VOCAB"))
@@ -1276,24 +1279,19 @@ func _refresh_prompt_hud() -> void:
 	var show_en := bool(current_spec["show_en_text"]) or (prompt_hint_stage >= 2)
 
 	if show_fr:
-		prompt_main_lbl.text = "♪ %s" % str(current_spec["prompt_fr"])
+		prompt_main_lbl.text = "♪  %s" % str(current_spec["prompt_fr"])
 	else:
-		if ptype == "SCENARIO":
-			prompt_main_lbl.text = "◉ DIALOGUE: %s   (Press [H] for Transcript • [E] Replay)" % str(current_spec.get("question_fr", "Listen carefully!"))
-		elif ptype == "MODIFIER":
-			prompt_main_lbl.text = "◉ 3D CHALLENGE: Listen to the size/speed/position command!  ([H] Show Text • [E] Replay)"
+		if ptype == "MODIFIER":
+			prompt_main_lbl.text = "◉ LISTEN: Size / Speed Challenge!  ([H] Show Text • [E] Replay)"
 		elif int(current_spec["tier"]) >= 3:
-			prompt_main_lbl.text = "◉ RIDDLE / CLUE: Listen & shoot the matching object!  ([H] Show Text • [E] Replay)"
+			prompt_main_lbl.text = "◉ LISTEN: French Clue!  ([H] Show Text • [E] Replay)"
 		else:
-			prompt_main_lbl.text = "◉ AUDIO ONLY: Listen to the French word & shoot the matching object!  ([H] Hint • [E] Replay)"
+			prompt_main_lbl.text = "◉ LISTEN & SHOOT!   ([E] Replay Audio  •  [H] Show Word)"
 
 	if show_en:
 		prompt_sub_lbl.text = str(current_spec["sub_en"])
 	else:
-		if ptype == "GRAMMAR":
-			prompt_sub_lbl.text = "Shoot the Crystal (or press [1–4]) that completes the sentence!  •  [E] Replay  •  [H] Show Grammar Rule"
-		else:
-			prompt_sub_lbl.text = "Press [1–4] or Click to shoot  •  [E] Replay Audio  •  [R] Slow Audio  •  [H] Reveal Translation / Hint"
+		prompt_sub_lbl.text = "Stop the matching 3D target before it reaches your barricade!   ([H] Hint  •  [R] Slow Audio)"
 
 
 # ==============================================================================
@@ -1304,21 +1302,20 @@ func _on_player_hovered(entity: Node) -> void:
 	if entity is PedestalStation:
 		var p := entity as PedestalStation
 		var item := VocabData.get_by_id(p.vocab_id)
-		_reticle_col = Color(0.35, 1.0, 0.78)
-		hover_info_lbl.text = "[Click] Hear Pronunciation: %s (%s)" % [item.get("fr_def", ""), item.get("en", "")]
+		_reticle_col = Color(0.45, 0.98, 0.58)
+		hover_info_lbl.text = "[Click] Hear: %s (%s)" % [item.get("fr_def", ""), item.get("en", "")]
 	elif entity is TargetDrone:
-		_reticle_col = Color(1.0, 0.90, 0.25)
+		_reticle_col = Color(1.0, 0.88, 0.24)
 		var td := entity as TargetDrone
 		if td.is_grammar_crystal:
-			hover_info_lbl.text = "Aiming at Option: « %s »  [Click to Shoot]" % td.grammar_option
-		else:
+			hover_info_lbl.text = "Option [%d]: %s" % [td.slot_number, td.grammar_option]
+		elif state == GameState.CALIBRATION:
 			var item := VocabData.get_by_id(td.vocab_id)
-			if state == GameState.CALIBRATION or int(current_spec.get("tier", 0)) == 0:
-				hover_info_lbl.text = "Aiming at: %s (%s)" % [item.get("fr_def", ""), item.get("en", "")]
-			else:
-				hover_info_lbl.text = "Aiming at: %s" % str(item.get("en", td.vocab_id)).to_upper()
+			hover_info_lbl.text = "%s = %s" % [item.get("fr_def", ""), item.get("en", "")]
+		else:
+			hover_info_lbl.text = ""
 	else:
-		_reticle_col = Color(0.25, 0.95, 0.80, 0.92)
+		_reticle_col = Color(0.98, 0.90, 0.65, 0.92)
 		hover_info_lbl.text = ""
 
 
@@ -1332,7 +1329,8 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 		audio.play_voice("word_%s.ogg" % ped.vocab_id)
 		srs.mark_calibrated(ped.vocab_id)
 		var item := VocabData.get_by_id(ped.vocab_id)
-		_show_feedback("♪ [%s] %s (%s) = %s  |  Tip: %s" % [item["cefr"], item["fr_def"], item["fr_indef"], item["en"], item["tip"]], true)
+		prompt_main_lbl.text = "♪ %s  =  %s" % [item["fr_def"], item["en"]]
+		prompt_sub_lbl.text = str(item["tip"])
 		return
 
 	if not (entity is TargetDrone):
@@ -1353,7 +1351,7 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 		calibration_queue.erase(vid)
 		score += 100
 		_update_stats_hud()
-		transition_delay = 0.50
+		transition_delay = 0.60
 		return
 
 	if state == GameState.COMBAT and prompt_active:
@@ -1362,49 +1360,43 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 
 		if drone.drone_tag == target_tag:
 			prompt_active = false
+			feedback_banner.visible = false
 			audio.play_sfx("hit_ok", 0.02, -1.5)
 			var pts := 100
+			var fast_bonus := (drone.global_position.z < 0.0 and int(current_spec.get("tier", 0)) >= 1)
 			if prompt_clean_try:
 				combo += 1
 				wave_hits_clean += 1
-				pts = (100 + combo * 25) * (1 + int(current_spec["tier"]))
+				pts = (100 + combo * 25) + (50 if fast_bonus else 0)
 			else:
-				pts = 60
+				pts = 75
 			score += pts
+			if fast_bonus and prompt_clean_try and drone.custom_ok_label == "":
+				var f_item := VocabData.get_by_id(target_tag)
+				drone.custom_ok_label = "+%d FAST! ✓ %s (%s)" % [pts, f_item.get("fr_def", target_tag), f_item.get("en", "")]
 			drone.explode_success(world_root, pts)
 			active_drones.erase(drone)
 
 			if ptype == "GRAMMAR":
 				var gid := str(current_spec["grammar_id"])
 				srs.record_grammar_result(gid, prompt_clean_try, prompt_used_assist)
-				audio.play_voice(str(current_spec["audio_file"]))
-				_show_feedback("✓ Correct! « %s »  —  %s" % [current_spec["sentence_full"], current_spec["rule"]], true)
-				prompt_main_lbl.text = "✓ « %s »" % str(current_spec["sentence_full"])
+				prompt_main_lbl.text = "✓ %s" % str(current_spec["sentence_full"])
 				prompt_sub_lbl.text = str(current_spec["en"])
 			elif ptype == "MODIFIER":
 				srs.global_step += 1
 				srs.save_progress()
-				_show_feedback("✓ Nice shot! « %s »  —  %s" % [current_spec["prompt_fr"], current_spec["rule"]], true)
-				prompt_main_lbl.text = "✓ « %s »" % str(current_spec["prompt_fr"])
-				prompt_sub_lbl.text = str(current_spec["sub_en"])
+				prompt_main_lbl.text = "✓ %s" % str(current_spec["prompt_fr"])
+				prompt_sub_lbl.text = str(current_spec["rule"])
 			else:
-				var res := srs.record_result(target_tag, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
+				srs.record_result(target_tag, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 				var t_item := VocabData.get_by_id(target_tag)
-				var tier_badges := ["Step 1 (Intro)", "Step 2 (Recall)", "Step 3 (Audio Only)", "Step 4 (Context)", "★ Mastered"]
-				var new_t := clampi(int(res["new_tier"]), 0, 4)
-				_show_feedback(
-					"✓ %s = %s  •  %s   [Now at: %s]" % [
-						t_item["fr_def"], t_item["en"], t_item["ipa"], tier_badges[new_t]
-					],
-					true
-				)
-				prompt_main_lbl.text = "✓ %s (%s) — %s" % [t_item["fr_def"], t_item["fr_indef"], t_item["en"]]
-				prompt_sub_lbl.text = "Pronunciation: %s  •  %s" % [t_item["ipa"], t_item["tip"]]
+				prompt_main_lbl.text = "✓ %s  =  %s" % [t_item["fr_def"], t_item["en"]]
+				prompt_sub_lbl.text = "Sounds like: \"%s\"" % t_item["ipa"]
 
 			_update_stats_hud()
-			transition_delay = 0.72
+			transition_delay = 1.05
 		else:
-			# Wrong drone shot: explain what was hit and highlight the right target so the player learns immediately!
+			# Wrong target shot: PAUSE all approaching drones & timer so the player can read and shoot the gold target at their own pace!
 			prompt_clean_try = false
 			combo = 0
 			shield_hp = maxf(10.0, shield_hp - 12.0)
@@ -1415,16 +1407,16 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 			if ptype == "GRAMMAR":
 				_highlight_true_target(target_tag)
 				_show_feedback(
-					"✗ Not « %s »! Shoot the gold-highlighted crystal « %s » (%s)" % [
-						drone.grammar_option, target_tag, current_spec["rule"]
+					"✗ Not « %s »! Shoot the gold-highlighted option « %s » to continue" % [
+						drone.grammar_option, target_tag
 					],
 					false
 				)
 			elif ptype == "MODIFIER":
 				_highlight_true_target("MOD_TARGET")
 				_show_feedback(
-					"✗ %s  →  « %s » (%s) — Shoot the gold-highlighted target!" % [
-						drone.custom_wrong_label, current_spec["prompt_fr"], current_spec["sub_en"]
+					"✗ %s  →  Shoot the gold-highlighted target (%s) to continue!" % [
+						drone.custom_wrong_label, current_spec["prompt_fr"]
 					],
 					false
 				)
@@ -1436,8 +1428,8 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 				_highlight_true_target(target_tag)
 				_play_slow_assist()
 				_show_feedback(
-					"✗ You shot %s (%s)!  Target is: %s (%s) — Shoot the gold-highlighted target!" % [
-						hit_item["fr_def"], hit_item["en"], true_item["fr_def"], true_item["en"]
+					"✗ That was %s (%s).  →  ★ Shoot the GOLD target: %s = %s (\"%s\")" % [
+						hit_item["fr_def"], hit_item["en"], true_item["fr_def"], true_item["en"], true_item["ipa"]
 					],
 					false
 				)
@@ -1445,10 +1437,15 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 
 
 func _highlight_true_target(target_tag: String) -> void:
+	var item := VocabData.get_by_id(target_tag)
 	for d in active_drones:
 		if is_instance_valid(d) and not d.is_destroyed:
+			d.approach_paused = true
 			if d.drone_tag == target_tag:
-				d.set_beacon(true, Color(1.0, 0.85, 0.15))
+				if not item.is_empty():
+					d.show_repair_target_card(str(item["fr_def"]), str(item["en"]))
+				else:
+					d.set_beacon(true, Color(1.0, 0.85, 0.15))
 
 
 func _play_slow_assist() -> void:
@@ -1458,34 +1455,31 @@ func _play_slow_assist() -> void:
 	if slow_f != "":
 		audio.play_voice(slow_f)
 	else:
-		audio.play_voice(str(current_spec.get("audio_file", "")), 0.80)
+		audio.play_voice(str(current_spec.get("audio_file", "")), 0.82)
 
 	if ptype == "VOCAB":
 		var tid := str(current_spec.get("target_id", ""))
 		var item := VocabData.get_by_id(tid)
 		if not item.is_empty():
-			prompt_sub_lbl.text = "Slow Audio: %s  •  Tip: %s" % [item["ipa"], item["tip"]]
-	elif ptype == "SCENARIO":
-		prompt_main_lbl.text = "♪ %s" % str(current_spec["prompt_fr"])
+			prompt_main_lbl.text = "♪ %s  =  %s" % [item["fr_def"], item["en"]]
+			prompt_sub_lbl.text = str(item["tip"])
 	elif ptype == "MODIFIER":
 		prompt_main_lbl.text = "♪ %s" % str(current_spec["prompt_fr"])
-		prompt_sub_lbl.text = str(current_spec["sub_en"])
-	elif ptype == "GRAMMAR":
 		prompt_sub_lbl.text = str(current_spec["sub_en"])
 
 
 func _show_feedback(msg: String, is_ok: bool) -> void:
 	feedback_banner.visible = true
-	var border_col := Color(0.28, 1.0, 0.68, 0.95) if is_ok else Color(1.0, 0.40, 0.40, 0.95)
-	var bg_col := Color(0.05, 0.16, 0.14, 0.95) if is_ok else Color(0.22, 0.06, 0.09, 0.95)
+	var border_col := Color(0.42, 0.96, 0.56, 0.95) if is_ok else Color(0.98, 0.76, 0.24, 0.96)
+	var bg_col := Color(0.10, 0.20, 0.12, 0.96) if is_ok else Color(0.24, 0.11, 0.08, 0.96)
 	feedback_banner.add_theme_stylebox_override("panel", _make_panel_style(bg_col, border_col, 10, 2))
 	feedback_lbl.text = msg
-	feedback_lbl.add_theme_color_override("font_color", Color(0.65, 1.0, 0.82) if is_ok else Color(1.0, 0.78, 0.78))
+	feedback_lbl.add_theme_color_override("font_color", Color(0.75, 1.0, 0.82) if is_ok else Color(1.0, 0.92, 0.68))
 
 
 func _update_stats_hud() -> void:
-	wave_lbl.text = "ROUND %d  •  SHOT %d/%d" % [wave_number, prompt_in_wave, PROMPTS_PER_WAVE]
-	score_lbl.text = "SCORE: %d  (x%d)" % [score, maxi(1, combo)]
+	wave_lbl.text = "ROUND %d  •  TARGET %d/%d" % [wave_number, prompt_in_wave, PROMPTS_PER_WAVE]
+	score_lbl.text = "SCORE: %d  (STREAK x%d)" % [score, maxi(1, combo)]
 	shield_bar.value = shield_hp
 
 
@@ -1502,16 +1496,18 @@ func _finish_wave() -> void:
 	audio.play_voice("radio_bravo.ogg")
 
 	var st := srs.get_summary_stats()
+	var act_s := srs.get_active_campaign_sector()
+	var s_info := VocabData.SECTORS[act_s]
 	summary_lbl.text = (
-		"Round %d Cleared!   •   Clean First-Try Hits: %d/%d\n"
-		+ "Score: %d   •   Current Streak: x%d   •   Overall Accuracy: %.0f%%\n\n"
-		+ "Campaign Stage: %d/9   •   3D Words Learned: %d/%d\n"
-		+ "Audio-Ready Words (Step 3+): %d   •   Grammar Rules Seen: %d/%d"
+		"Round %d Complete!   •   First-Try Hits: %d / %d\n"
+		+ "Score: %d   •   Best Streak: x%d\n\n"
+		+ "Current Stage: Stage %d/9 (%s)\n"
+		+ "Words Learned: %d / %d   •   Audio-Ready: %d"
 	) % [
 		wave_number, wave_hits_clean, PROMPTS_PER_WAVE,
-		score, maxi(1, combo), st["accuracy"],
-		st["active_stage"], st["seen"], st["total_words"],
-		st["listening_ready"], st["gram_seen"], st["gram_total"]
+		score, maxi(1, combo),
+		act_s + 1, s_info["name_en"],
+		st["seen"], st["total_words"], st["listening_ready"]
 	]
 	summary_panel.visible = true
 
@@ -1539,6 +1535,13 @@ func _quick_shoot_slot(slot_idx: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == GameState.WAVE_SUMMARY:
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.physical_keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_1]:
+				_continue_to_next_round()
+				get_viewport().set_input_as_handled()
+				return
+
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var kc: int = event.physical_keycode
@@ -1586,8 +1589,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if state == GameState.MENU:
-		_menu_orbit_angle += delta * 0.18
-		_menu_cam.global_position = Vector3(sin(_menu_orbit_angle) * 13.5, 4.8, cos(_menu_orbit_angle) * 13.5 - 2.0)
+		_menu_orbit_angle += delta * 0.16
+		_menu_cam.global_position = Vector3(sin(_menu_orbit_angle) * 13.5, 4.6, cos(_menu_orbit_angle) * 13.5 - 2.0)
 		_menu_cam.look_at(Vector3(0, 1.5, -6.5), Vector3.UP)
 		return
 
@@ -1610,7 +1613,8 @@ func _process(delta: float) -> void:
 				_next_combat_prompt()
 		return
 
-	if state == GameState.COMBAT and prompt_active:
+	# Only drain the timer on Level 2+ while no mistake repair is paused!
+	if state == GameState.COMBAT and prompt_active and prompt_clean_try and int(current_spec.get("tier", 0)) >= 1:
 		prompt_timer -= delta
 		timer_bar.value = clampf((prompt_timer / PROMPT_TIME_LIMIT) * 100.0, 0.0, 100.0)
 		if prompt_timer <= 0.0:
@@ -1620,9 +1624,10 @@ func _process(delta: float) -> void:
 			var target_tag := str(current_spec["target_id"])
 			_highlight_true_target(target_tag)
 			_play_slow_assist()
-			_show_feedback("! Time up! Shoot the gold-highlighted target to continue!", false)
-			prompt_timer = 10.0
+			_show_feedback("! Time up — shoot the gold-highlighted target to continue!", false)
 			_update_stats_hud()
+	elif state == GameState.COMBAT and prompt_active and int(current_spec.get("tier", 0)) == 0:
+		timer_bar.value = 100.0
 
 
 # ==============================================================================
@@ -1635,19 +1640,16 @@ func _run_automated_verification() -> void:
 
 	var test_srs := SRSEngine.new()
 	test_srs.reset_progress()
-	assert(test_srs.cards.size() == 45, "Expected 45 CEFR A1-B1 vocabulary cards")
-	assert(test_srs.grammar_cards.size() == 16, "Expected 16 CEFR A2-B1 grammar breach cards")
+	assert(test_srs.cards.size() == 45, "Expected 45 vocabulary cards")
 	assert(test_srs.get_active_campaign_sector() == 0, "New campaign should start at Stage 1 (Sector 0)")
 	test_srs.mark_calibrated("pomme")
 	var r1 := test_srs.record_result("pomme", true, false, [])
-	assert(int(r1["new_tier"]) == 1, "Clean hit should advance Step 1 (Tier 0) -> Step 2 (Tier 1)")
+	assert(int(r1["new_tier"]) == 1, "Clean hit should advance Level 1 -> Level 2")
 	var r2 := test_srs.record_result("pomme", true, false, [])
-	assert(int(r2["new_tier"]) == 2, "Clean hit should advance Step 2 (Tier 1) -> Step 3 (Tier 2 Audio Only)")
+	assert(int(r2["new_tier"]) == 2, "Clean hit should advance Level 2 -> Level 3")
 	var r_err := test_srs.record_result("pomme", false, false, ["fromage"])
-	assert(int(r_err["new_tier"]) == 1, "Mistake should drop Tier 2 -> Tier 1 and log confusion")
-	var rg := test_srs.record_grammar_result("gram_09", true, false)
-	assert(int(rg["new_tier"]) == 1, "Grammar breach card should advance tier on clean hit")
-	print("VERIFY_OK: CEFR A1-B1 SRS Engine (45 vocab + 16 grammar + modifiers + scenarios) passed.")
+	assert(int(r_err["new_tier"]) == 1, "Mistake should drop Level 3 -> Level 2 and log confusion")
+	print("VERIFY_OK: French Target Arcade SRS & Stage Progression verified.")
 
 	srs.reset_progress()
 	srs.sector_filter = -1
@@ -1656,7 +1658,7 @@ func _run_automated_verification() -> void:
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/01_menu.png")
 
-	# 2. Step 1 (Tier 0): New Word Spotlight in Stage 1 showcasing the new Apple (`pomme.blend`) & Heart (`coeur.blend`)
+	# 2. Level 1 (Tier 0): New Word Spotlight in Stage 1 showcasing the matte Apple (`pomme.blend`) & Heart (`coeur.blend`)
 	srs.reset_progress()
 	srs.sector_filter = 0
 	_on_start_mission_pressed()
@@ -1667,17 +1669,18 @@ func _run_automated_verification() -> void:
 	for i in range(3):
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup(demo_ids[i], Vector3(demo_xs[i], 2.18, -0.3), player.global_position, 0.0, 1.15)
+		d.setup(demo_ids[i], Vector3(demo_xs[i], 2.15, -0.5), player.global_position, 0.0, 1.18)
+		d.set_slot_badge(i + 1)
 		if demo_ids[i] == "pomme":
-			d.show_calibration_card("la pomme", "the apple")
+			d.show_calibration_card("la pomme", "the apple", "lah PUM")
 		active_drones.append(d)
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.15, -0.3))
+	player.look_toward_point(Vector3(0.0, 2.15, -0.5))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/02_calibration_3d.png")
 
-	# 3. Step 3 (Tier 2): Pure Listening Combat at close-mid range
+	# 3. Level 3 (Tier 2): Pure Listening Arcade Wave with approaching targets
 	srs.sector_filter = 4
 	for vid in ["avion", "train", "voiture", "velo", "valise"]:
 		srs.mark_calibrated(vid)
@@ -1685,50 +1688,64 @@ func _run_automated_verification() -> void:
 	_clear_drones()
 	current_spec = srs.build_prompt_spec("avion")
 	_spawn_vocab_drones(current_spec)
+	for d in active_drones:
+		d.approach_paused = true
+		d._anchor_pos.z = -1.2
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.20, -0.5))
+	player.look_toward_point(Vector3(0.0, 2.15, -1.2))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/03_combat_pure_listening.png")
 
-	# 4. A2 3D Spatial & Comparative Modifier Operation ("Tirez sur la cible la plus grande !")
+	# 4. 3D Size, Speed & Position Challenge ("la plus grande !")
 	_clear_drones()
 	current_spec = srs.build_modifier_prompt_spec(0)
 	_spawn_modifier_drones(current_spec)
-	prompt_hint_stage = 1
+	prompt_hint_stage = 2
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.20, -0.5))
+	player.look_toward_point(Vector3(0.0, 2.15, -0.5))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/06_a2_spatial_modifiers.png")
 
-	# 5. B1 Holographic Data-Crystal Grammar Breach
+	# 5. Pause-and-Learn Mistake Repair Spotlight (shows how wrong shots freeze the wave & highlight the right object)
 	_clear_drones()
-	current_spec = srs.build_grammar_prompt_spec("gram_09")
-	_spawn_grammar_drones(current_spec)
-	prompt_hint_stage = 2
+	srs.sector_filter = 0
+	current_spec = srs.build_prompt_spec("pain")
+	var err_ids := ["pomme", "pain", "bouteille"]
+	for i in range(3):
+		var d := TargetDrone.new()
+		drones_root.add_child(d)
+		d.setup(err_ids[i], Vector3(demo_xs[i], 2.15, -0.6), player.global_position, 0.0, 1.18)
+		d.set_slot_badge(i + 1)
+		active_drones.append(d)
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.25, -0.5))
+	active_drones[0].flash_wrong_hit()
+	_highlight_true_target("pain")
+	_play_slow_assist()
+	_show_feedback("✗ That was la pomme (the apple).  →  ★ Shoot the GOLD target: le pain = the bread (\"luh PAN\")", false)
+	player.look_toward_point(Vector3(0.0, 2.15, -0.6))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/07_b1_grammar_breach.png")
 
-	# 6. 3D Practice Gallery showing Sector 4 (fleur, coeur, poisson, etoile, fusee)
+	# 6. 3D Practice Gallery showing Stage 4 (fleur, coeur, poisson, etoile, fusee)
+	feedback_banner.visible = false
 	_on_enter_gallery_pressed()
 	_load_gallery_sector(3)
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/05_gallery_study.png")
 
-	# 7. Interactive [Tab] SRS Lexicon (with HUD cleanly hidden behind it!)
-	lexicon_tab = "ALL"
+	# 7. Interactive [Tab] Word Book (Stages 1–4)
+	lexicon_tab = "A1"
 	_toggle_lexicon(true)
 	for i in range(4):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/04_srs_lexicon.png")
 
-	# 8. Interactive [Tab] Grammar Breach Matrix (A2-B1)
-	lexicon_tab = "GRAM"
+	# 8. Interactive [Tab] Word Book (Stages 5–7)
+	lexicon_tab = "A2"
 	_populate_lexicon_grid()
 	for i in range(4):
 		await get_tree().process_frame

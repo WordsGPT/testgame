@@ -5,6 +5,8 @@ extends Area3D
 ## Designed for crystal-clear visual readability at mid-range (6.5m–8.5m), generous hitboxes,
 ## lane-disciplined hover motion (no overlapping targets), and juicy arcade destruction feedback.
 
+signal reached_defense_line(drone: TargetDrone)
+
 var vocab_id: String = ""
 var drone_tag: String = "" # Matches against target_tag (defaults to vocab_id)
 var grammar_option: String = ""
@@ -13,6 +15,10 @@ var custom_ok_label: String = ""
 var is_calibrated_target: bool = false
 var is_grammar_crystal: bool = false
 var is_destroyed: bool = false
+var approach_speed: float = 0.0
+var defense_z: float = 3.2
+var approach_paused: bool = false
+var slot_number: int = 0
 
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _orbit_phase: float = 0.0
@@ -125,23 +131,25 @@ func setup(
 	_badge_label.visible = false
 	_visual_root.add_child(_badge_label)
 
-	# 5. Bottom English Concept Tag (so the player always knows what physical object the 3D model represents!)
+	# 5. Bottom Lane Badge (clean [1] [2] [3] [4] arcade lane indicator — no English spoilers!)
 	_concept_label = Label3D.new()
 	_concept_label.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
-	_concept_label.position = Vector3(0, -1.04 * model_scale, 0)
+	_concept_label.position = Vector3(0, -1.02 * model_scale, 0)
 	_concept_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_concept_label.no_depth_test = true
-	_concept_label.font_size = 34
+	_concept_label.font_size = 32
 	_concept_label.outline_size = 10
-	_concept_label.modulate = Color(0.92, 0.96, 1.0, 0.92)
-	_concept_label.outline_modulate = Color(0.05, 0.08, 0.15, 0.92)
-	var item := VocabData.get_by_id(vocab_id)
-	if not item.is_empty():
-		_concept_label.text = str(item.get("en", "")).to_upper()
-		_concept_label.visible = true
-	else:
-		_concept_label.visible = false
+	_concept_label.modulate = Color(0.98, 0.92, 0.74, 0.90)
+	_concept_label.outline_modulate = Color(0.14, 0.09, 0.05, 0.92)
+	_concept_label.visible = false
 	_visual_root.add_child(_concept_label)
+
+
+func set_slot_badge(slot_num: int) -> void:
+	slot_number = slot_num
+	if _concept_label and slot_num > 0:
+		_concept_label.text = "[%d]" % slot_num
+		_concept_label.visible = true
 
 
 func set_concept_tag_visible(vis: bool) -> void:
@@ -169,6 +177,12 @@ func _physics_process(delta: float) -> void:
 		return
 	_orbit_phase += delta * _orbit_speed
 	_bob_phase += delta * 2.0
+
+	if approach_speed > 0.0 and not approach_paused:
+		_anchor_pos.z += approach_speed * delta
+		if _anchor_pos.z >= defense_z:
+			_anchor_pos.z = -3.8
+			reached_defense_line.emit(self)
 
 	var offset := _strafe_dir * (sin(_orbit_phase) * _strafe_amp)
 	offset.y = sin(_bob_phase) * _bob_amp
@@ -201,11 +215,23 @@ func set_beacon(enabled: bool, color: Color = Color(1.0, 0.84, 0.18)) -> void:
 		_beacon_mat.albedo_color = color
 
 
-func show_calibration_card(fr_text: String, en_text: String) -> void:
+func show_calibration_card(fr_text: String, en_text: String, sound_like: String = "") -> void:
 	is_calibrated_target = true
-	set_beacon(true, Color(0.18, 0.96, 0.62))
-	_badge_label.text = "★ NEW WORD: %s\n(%s)" % [fr_text, en_text]
-	_badge_label.modulate = Color(0.35, 1.0, 0.72)
+	set_beacon(true, Color(0.22, 0.94, 0.52))
+	if sound_like != "":
+		_badge_label.text = "★ %s = %s\nSounds like: \"%s\"" % [fr_text, en_text, sound_like]
+	else:
+		_badge_label.text = "★ %s = %s" % [fr_text, en_text]
+	_badge_label.modulate = Color(0.98, 0.95, 0.78)
+	_badge_label.visible = true
+	_badge_timer = 0.0
+
+
+func show_repair_target_card(fr_text: String, en_text: String) -> void:
+	is_calibrated_target = true
+	set_beacon(true, Color(1.0, 0.82, 0.18))
+	_badge_label.text = "SHOOT ME: %s\n(%s)" % [fr_text, en_text]
+	_badge_label.modulate = Color(1.0, 0.90, 0.32)
 	_badge_label.visible = true
 	_badge_timer = 0.0
 
@@ -283,8 +309,8 @@ func explode_success(parent_world: Node3D, points_earned: int = 100) -> void:
 	fx_root.add_child(pop)
 
 	var tw := parent_world.create_tween()
-	tw.tween_property(pop, "position:y", 1.65, 0.85).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(pop, "modulate:a", 0.0, 0.85)
+	tw.tween_property(pop, "position:y", 1.85, 1.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(pop, "modulate:a", 0.0, 1.35)
 	tw.tween_callback(fx_root.queue_free)
 
 	queue_free()

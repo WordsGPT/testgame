@@ -100,11 +100,10 @@ func set_vocab(new_id: String) -> void:
 
 	var item := VocabData.get_by_id(vocab_id)
 	if not item.is_empty():
-		var g_tag := "fem." if String(item["gender"]).begins_with("f") else "masc."
-		var g_col := Color(1.0, 0.72, 0.86) if g_tag == "fem." else Color(0.58, 0.90, 1.0)
-		_card_label.text = "%s (%s)\n%s  •  %s" % [item["fr_def"], g_tag, item["en"], item["ipa"]]
+		var g_col := Color(0.98, 0.88, 0.56)
+		_card_label.text = "%s\n%s  •  \"%s\"" % [item["fr_def"], item["en"], item["ipa"]]
 		_card_label.modulate = g_col
-		_ring_mat.albedo_color = g_col
+		_ring_mat.albedo_color = Color(0.92, 0.72, 0.24)
 
 
 func trigger_scan_pulse() -> void:
