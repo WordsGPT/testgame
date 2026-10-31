@@ -158,24 +158,40 @@ def add_torus(loc=(0, 0, 0), major_r=0.5, minor_r=0.1, scale=(1, 1, 1), rot=(0, 
 
 def build_pomme():
     reset_scene()
-    red = make_mat("AppleRed", (0.85, 0.09, 0.11), roughness=0.22)
-    stem_m = make_mat("StemBrown", (0.34, 0.20, 0.09), roughness=0.7)
-    leaf_m = make_mat("LeafGreen", (0.16, 0.68, 0.20), roughness=0.35)
-    apple = add_sphere(seg=32, ring=24, mat=red)
+    red = make_mat("AppleRed", (0.90, 0.08, 0.10), metallic=0.08, roughness=0.18)
+    stem_m = make_mat("StemBrown", (0.36, 0.20, 0.08), roughness=0.65)
+    leaf_m = make_mat("LeafGreen", (0.14, 0.76, 0.22), roughness=0.28)
+    apple = add_sphere(seg=40, ring=28, mat=red)
     for v in apple.data.vertices:
-        r_xy = math.hypot(v.co.x, v.co.y)
-        if v.co.z > 0:
-            v.co.x *= 1.08
-            v.co.y *= 1.08
-        else:
-            v.co.x *= 0.92
-            v.co.y *= 0.92
-        dip = math.exp(-(r_xy * 3.2) ** 2)
-        v.co.z += (-0.34 if v.co.z > 0 else 0.22) * dip
+        x, y, z = v.co.x, v.co.y, v.co.z
+        r_xy = math.hypot(x, y)
+        # Plump upper shoulder, gently tapered lower half
+        profile = 1.12 - 0.14 * z + 0.10 * (1.0 - z * z)
+        # Smooth dimple at top and bottom poles
+        top_dip = 0.32 * math.exp(-((r_xy / 0.38) ** 2)) if z > 0.15 else 0.0
+        bot_dip = 0.20 * math.exp(-((r_xy / 0.34) ** 2)) if z < -0.15 else 0.0
+        z_new = z * 0.88 - top_dip + bot_dip
+        # Subtle 5-lobe apple crown contour
+        ang = math.atan2(y, x)
+        lobe = 1.0 + 0.025 * math.cos(5.0 * ang) * (r_xy ** 2)
+        v.co = Vector((x * profile * lobe, y * profile * lobe, z_new))
     apple.data.update()
-    add_cyl(loc=(0.03, 0, 0.85), r=0.065, depth=0.45, rot=(0, 0.22, 0), mat=stem_m, verts=12)
-    add_sphere(loc=(0.30, 0.0, 0.92), scale=(0.30, 0.13, 0.045), rot=(0.2, -0.35, 0.2), mat=leaf_m, seg=18, ring=12)
-    finalize_and_save("pomme.blend", 1.1)
+    shade_smooth(apple)
+    # Compact curved stem tucked into the top dimple
+    stem = add_cyl(loc=(0.02, 0, 0.72), r=0.038, depth=0.26, rot=(0, 0.18, 0), mat=stem_m, verts=16)
+    for v in stem.data.vertices:
+        if v.co.z > 0:
+            v.co.x += 0.04 * (v.co.z / 0.13) ** 2
+    stem.data.update()
+    # Sculpted pointed green leaf
+    leaf = add_sphere(loc=(0.24, 0.0, 0.78), scale=(0.26, 0.12, 0.035), rot=(0.25, -0.32, 0.15), mat=leaf_m, seg=24, ring=14)
+    for v in leaf.data.vertices:
+        # Pointed leaf tips
+        taper = max(0.05, 1.0 - abs(v.co.x) * 0.85)
+        v.co.y *= taper
+        v.co.z += 0.12 * (v.co.x ** 2)
+    leaf.data.update()
+    finalize_and_save("pomme.blend", 1.32)
 
 
 def build_fromage():
@@ -453,17 +469,54 @@ def build_fleur():
 
 def build_coeur():
     reset_scene()
-    ruby = make_mat("HeartRuby", (0.92, 0.07, 0.18), metallic=0.15, roughness=0.18)
-    h = add_sphere(seg=44, ring=32, mat=ruby)
-    for v in h.data.vertices:
-        x, y, z = v.co.x, v.co.y, v.co.z
-        ax = abs(x)
-        z_new = z * 0.85 + 0.42 * math.sqrt(ax + 0.02) - 0.18
-        taper = max(0.04, (z + 1.05) * 0.62) if z < 0.1 else 1.0
-        v.co = Vector((x * (0.65 + 0.50 * taper), y * 0.46 * (0.45 + 0.55 * taper), z_new))
-    h.data.update()
-    shade_smooth(h)
-    finalize_and_save("coeur.blend", 1.10)
+    ruby = make_mat("HeartRuby", (0.95, 0.06, 0.18), metallic=0.18, roughness=0.16, emission=(0.55, 0.02, 0.08), emission_strength=0.35)
+    gold = make_mat("HeartGoldTrim", (0.98, 0.80, 0.22), metallic=0.88, roughness=0.18)
+    mesh = bpy.data.meshes.new("HeartMesh")
+    bm = bmesh.new()
+
+    n_alpha = 24  # Front pole to back pole
+    n_t = 64      # Around the classic parametric heart silhouette
+    front_pole = bm.verts.new((0.0, -0.38, -0.02))
+    back_pole = bm.verts.new((0.0, 0.38, -0.02))
+
+    rings = []
+    for ia in range(1, n_alpha):
+        alpha = math.pi * ia / n_alpha
+        r_scale = (math.sin(alpha)) ** 0.72
+        y_val = -0.38 * math.cos(alpha)
+        ring = []
+        for it in range(n_t):
+            t = 2.0 * math.pi * it / n_t
+            hx = (math.sin(t) ** 3)
+            hz = (13.0 * math.cos(t) - 5.0 * math.cos(2.0 * t) - 2.0 * math.cos(3.0 * t) - math.cos(4.0 * t)) / 16.0
+            ring.append(bm.verts.new((hx * r_scale, y_val, -0.02 + (hz + 0.02) * r_scale)))
+        rings.append(ring)
+
+    # Cap front & back poles and stitch rings
+    for it in range(n_t):
+        nxt = (it + 1) % n_t
+        bm.faces.new((front_pole, rings[0][nxt], rings[0][it]))
+        bm.faces.new((back_pole, rings[-1][it], rings[-1][nxt]))
+
+    for ia in range(len(rings) - 1):
+        r1, r2 = rings[ia], rings[ia + 1]
+        for it in range(n_t):
+            nxt = (it + 1) % n_t
+            bm.faces.new((r1[it], r1[nxt], r2[nxt], r2[it]))
+
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+
+    h_obj = bpy.data.objects.new("Heart", mesh)
+    bpy.context.collection.objects.link(h_obj)
+    shade_smooth(h_obj)
+    assign_mat(h_obj, ruby)
+
+    # Add a golden diagonal arrow / band for unmistakable 3D silhouette depth
+    add_cyl(loc=(0, 0, -0.02), r=0.032, depth=1.85, rot=(0, 0.92, 0), mat=gold, verts=16)
+    add_cone(loc=(0.76, 0, 0.56), r1=0.10, r2=0.01, depth=0.22, rot=(0, 0.92, 0), mat=gold, verts=14)
+    finalize_and_save("coeur.blend", 1.32)
 
 
 def build_poisson():
@@ -657,33 +710,48 @@ def build_chaise():
     finalize_and_save("chaise.blend", 1.22)
 
 
-def build_lit():
+def build_batterie():
     reset_scene()
-    wood = make_mat("WalnutBed", (0.44, 0.25, 0.12), roughness=0.55)
-    sheet = make_mat("WhiteSheet", (0.95, 0.96, 0.98), roughness=0.6)
-    duvet = make_mat("BlueDuvet", (0.18, 0.52, 0.88), roughness=0.65)
-    add_cube(loc=(0, 0, -0.14), scale=(1.18, 0.78, 0.16), mat=wood, bevel=0.02)
-    add_cube(loc=(-0.56, 0, 0.14), scale=(0.08, 0.80, 0.56), mat=wood, bevel=0.02)
-    add_cube(loc=(0.56, 0, -0.02), scale=(0.07, 0.80, 0.32), mat=wood, bevel=0.02)
-    add_cube(loc=(0, 0, 0.02), scale=(1.06, 0.72, 0.18), mat=sheet, bevel=0.03)
-    add_cube(loc=(0.15, 0, 0.05), scale=(0.76, 0.75, 0.20), mat=duvet, bevel=0.04)
-    add_sphere(loc=(-0.34, 0, 0.15), scale=(0.15, 0.28, 0.085), mat=sheet)
-    for lx in (-0.54, 0.54):
-        for ly in (-0.35, 0.35):
-            add_cyl(loc=(lx, ly, -0.28), r=0.045, depth=0.22, mat=wood, verts=12)
-    finalize_and_save("lit.blend", 1.24)
+    dark = make_mat("BatteryBody", (0.12, 0.14, 0.18), metallic=0.65, roughness=0.28)
+    copper = make_mat("BatteryCopper", (0.92, 0.54, 0.16), metallic=0.82, roughness=0.22)
+    silver = make_mat("BatteryCap", (0.85, 0.88, 0.92), metallic=0.90, roughness=0.18)
+    glow = make_mat("ChargeGreen", (0.15, 0.95, 0.42), roughness=0.15, emission=(0.12, 0.92, 0.38), emission_strength=1.8)
+    add_cyl(loc=(0, 0, -0.18), r=0.36, depth=0.64, mat=dark, verts=28)
+    add_cyl(loc=(0, 0, 0.28), r=0.362, depth=0.32, mat=copper, verts=28)
+    add_cyl(loc=(0, 0, 0.45), r=0.35, depth=0.05, mat=silver, verts=28)
+    add_cyl(loc=(0, 0, -0.51), r=0.35, depth=0.05, mat=silver, verts=28)
+    # Positive terminal nub on top
+    add_cyl(loc=(0, 0, 0.53), r=0.13, depth=0.12, mat=silver, verts=22)
+    # Glowing charge bars on front & back
+    for sy in (-0.355, 0.355):
+        for bz in (-0.32, -0.16, 0.0):
+            add_cube(loc=(0, sy, bz), scale=(0.24, 0.025, 0.08), mat=glow, bevel=0.005)
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.transform.rotate(value=0.32, orient_axis="Y")
+    finalize_and_save("batterie.blend", 1.24)
 
 
-def build_lampe():
+def build_chaussure():
     reset_scene()
-    brass = make_mat("LampBrass", (0.88, 0.68, 0.20), metallic=0.82, roughness=0.24)
-    shade = make_mat("WarmShade", (1.0, 0.86, 0.42), roughness=0.35, emission=(1.0, 0.78, 0.28), emission_strength=1.5)
-    add_cyl(loc=(0, 0, -0.52), r=0.34, depth=0.08, mat=brass, verts=26)
-    add_sphere(loc=(0, 0, -0.44), scale=(0.14, 0.14, 0.10), mat=brass)
-    add_cyl(loc=(0, 0, -0.05), r=0.045, depth=0.78, mat=brass, verts=16)
-    add_cone(loc=(0, 0, 0.34), r1=0.52, r2=0.24, depth=0.52, mat=shade, verts=28)
-    add_torus(loc=(0, 0, 0.09), major_r=0.51, minor_r=0.02, mat=brass, seg=28)
-    finalize_and_save("lampe.blend", 1.18)
+    sole = make_mat("SneakerSole", (0.95, 0.96, 0.98), roughness=0.45)
+    upper = make_mat("SneakerRed", (0.88, 0.12, 0.18), roughness=0.38)
+    trim = make_mat("SneakerStripe", (0.96, 0.97, 0.99), roughness=0.32)
+    dark = make_mat("ShoeInner", (0.14, 0.16, 0.20), roughness=0.65)
+    # Thick athletic sole along X
+    add_cube(loc=(0.0, 0, -0.26), scale=(1.12, 0.44, 0.14), mat=sole, bevel=0.04)
+    add_sphere(loc=(-0.42, 0, -0.21), scale=(0.24, 0.21, 0.09), mat=sole, seg=22, ring=12)
+    # Main shoe upper & toe box
+    add_sphere(loc=(-0.18, 0, -0.10), scale=(0.46, 0.20, 0.18), mat=upper, seg=26, ring=16)
+    add_cube(loc=(0.22, 0, -0.02), scale=(0.56, 0.40, 0.36), mat=upper, bevel=0.06)
+    # Collar & tongue
+    add_cyl(loc=(0.30, 0, 0.18), r=0.16, depth=0.14, scale=(1.1, 0.95, 1.0), mat=dark, verts=20)
+    add_cube(loc=(0.05, 0, 0.15), scale=(0.24, 0.26, 0.22), rot=(0, -0.55, 0), mat=upper, bevel=0.03)
+    # White laces & side stripes
+    for lx in (-0.12, -0.02, 0.08):
+        add_cube(loc=(lx, 0, 0.08 - lx * 0.35), scale=(0.045, 0.28, 0.035), mat=trim, bevel=0.005)
+    for sy in (-0.205, 0.205):
+        add_cube(loc=(0.12, sy, -0.06), scale=(0.42, 0.02, 0.07), rot=(0, 0.28, 0), mat=trim, bevel=0.004)
+    finalize_and_save("chaussure.blend", 1.28)
 
 
 def build_parapluie():
@@ -989,20 +1057,32 @@ def build_holo_crystal():
 
 def build_blaster():
     reset_scene()
-    body_m = make_mat("CarbineBody", (0.14, 0.17, 0.22), metallic=0.78, roughness=0.28)
-    shroud_m = make_mat("CobaltShroud", (0.14, 0.36, 0.82), metallic=0.55, roughness=0.25)
-    trim_m = make_mat("SilverTrim", (0.82, 0.85, 0.90), metallic=0.88, roughness=0.20)
-    core_m = make_mat("SonicCore", (0.18, 0.90, 1.0), roughness=0.1, emission=(0.15, 0.85, 1.0), emission_strength=2.4)
-    add_cube(loc=(0, 0.05, 0.0), scale=(0.10, 0.42, 0.13), mat=body_m, bevel=0.015)
-    add_cube(loc=(0, -0.22, 0.02), scale=(0.085, 0.36, 0.095), mat=shroud_m, bevel=0.012)
-    add_cyl(loc=(0, -0.32, 0.02), r=0.024, depth=0.56, rot=(math.pi * 0.5, 0, 0), mat=core_m, verts=16)
-    add_cube(loc=(-0.048, -0.28, 0.02), scale=(0.018, 0.44, 0.055), mat=trim_m, bevel=0.004)
-    add_cube(loc=(0.048, -0.28, 0.02), scale=(0.018, 0.44, 0.055), mat=trim_m, bevel=0.004)
-    add_torus(loc=(0, -0.56, 0.02), major_r=0.042, minor_r=0.010, rot=(math.pi * 0.5, 0, 0), mat=core_m)
-    add_cube(loc=(0, 0.02, 0.095), scale=(0.07, 0.14, 0.055), mat=body_m, bevel=0.008)
-    add_cube(loc=(0, 0.02, 0.115), scale=(0.045, 0.015, 0.04), mat=core_m, bevel=0.003)
-    add_cube(loc=(0, 0.14, -0.12), scale=(0.07, 0.095, 0.20), rot=(-0.28, 0, 0), mat=body_m, bevel=0.012)
-    finalize_and_save("blaster.blend", target_size=0.72, center_origin=False)
+    pearl = make_mat("ReceiverPearl", (0.92, 0.94, 0.98), metallic=0.35, roughness=0.22)
+    cobalt = make_mat("CobaltShroud", (0.12, 0.38, 0.88), metallic=0.55, roughness=0.22)
+    dark = make_mat("CarbonGrip", (0.14, 0.16, 0.20), metallic=0.65, roughness=0.35)
+    gold = make_mat("GoldAccent", (0.96, 0.78, 0.22), metallic=0.88, roughness=0.18)
+    core_m = make_mat("SonicCore", (0.15, 0.92, 1.0), roughness=0.08, emission=(0.12, 0.88, 1.0), emission_strength=2.8)
+
+    # Sleek upper receiver & contoured barrel shroud along -Y (forward in Godot after import)
+    add_cube(loc=(0, 0.04, 0.01), scale=(0.085, 0.38, 0.11), mat=pearl, bevel=0.018)
+    add_cube(loc=(0, -0.22, 0.015), scale=(0.072, 0.38, 0.085), mat=cobalt, bevel=0.015)
+    # Twin glowing cyan plasma rails + barrel core
+    add_cyl(loc=(0, -0.34, 0.02), r=0.018, depth=0.58, rot=(math.pi * 0.5, 0, 0), mat=core_m, verts=18)
+    for sx in (-0.040, 0.040):
+        add_cube(loc=(sx, -0.20, 0.02), scale=(0.012, 0.42, 0.022), mat=core_m, bevel=0.003)
+        add_cube(loc=(sx * 0.95, 0.02, 0.055), scale=(0.012, 0.28, 0.018), mat=gold, bevel=0.003)
+    # Muzzle brake ring
+    add_torus(loc=(0, -0.58, 0.02), major_r=0.036, minor_r=0.009, rot=(math.pi * 0.5, 0, 0), mat=core_m)
+    # Holographic Reflex Sight on top rail
+    add_cube(loc=(0, 0.0, 0.082), scale=(0.058, 0.12, 0.022), mat=dark, bevel=0.005)
+    for sx in (-0.026, 0.026):
+        add_cube(loc=(sx, 0.0, 0.115), scale=(0.008, 0.07, 0.052), mat=cobalt, bevel=0.002)
+    add_cube(loc=(0, 0.0, 0.140), scale=(0.056, 0.07, 0.008), mat=cobalt, bevel=0.002)
+    add_torus(loc=(0, -0.01, 0.115), major_r=0.014, minor_r=0.003, rot=(math.pi * 0.5, 0, 0), mat=core_m, seg=20)
+    # Angled ergonomic grip & foregrip
+    add_cube(loc=(0, 0.13, -0.10), scale=(0.062, 0.085, 0.18), rot=(-0.32, 0, 0), mat=dark, bevel=0.012)
+    add_cube(loc=(0, -0.16, -0.055), scale=(0.052, 0.12, 0.065), rot=(0.22, 0, 0), mat=dark, bevel=0.010)
+    finalize_and_save("blaster.blend", target_size=0.74, center_origin=False)
 
 
 def build_drone():
@@ -1045,10 +1125,9 @@ def main():
         build_fleur, build_coeur, build_poisson, build_etoile, build_fusee,
         # Sector 5 (A2 - Voyages)
         build_avion, build_train, build_voiture, build_velo, build_valise,
-        # Sector 6 (A2 - Maison)
-        build_chaise, build_lit, build_lampe, build_parapluie, build_sac,
-        # Sector 7 (A2+ - Tech & Médias)
-        build_ordinateur, build_telephone, build_appareil, build_microphone, build_guitare,
+        # Sector 6 & 7 (A2 - Tech, Médias, Ville & Quotidien)
+        build_ordinateur, build_telephone, build_appareil, build_microphone, build_batterie,
+        build_parapluie, build_sac, build_chaussure, build_chaise, build_guitare,
         # Sector 8 (B1 - Santé & Société)
         build_medicament, build_ambulance, build_lettre, build_journal, build_cadeau,
         # Sector 9 (B1 - Environnement & Monde)

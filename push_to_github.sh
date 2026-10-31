@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
-REPO_URL="${1:-git@github.com:gonz-mart/franc-tireur.git}"
+REPO_URL="${1:-git@github.com:WordsGPT/testgame.git}"
 
 git config core.sshCommand "ssh -i /home/jovyan/.ssh/github_no_pass -o StrictHostKeyChecking=no"
 if git remote get-url origin >/dev/null 2>&1; then
