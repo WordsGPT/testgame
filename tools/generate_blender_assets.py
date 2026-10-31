@@ -158,40 +158,37 @@ def add_torus(loc=(0, 0, 0), major_r=0.5, minor_r=0.1, scale=(1, 1, 1), rot=(0, 
 
 def build_pomme():
     reset_scene()
-    red = make_mat("AppleRed", (0.90, 0.08, 0.10), metallic=0.08, roughness=0.18)
-    stem_m = make_mat("StemBrown", (0.36, 0.20, 0.08), roughness=0.65)
-    leaf_m = make_mat("LeafGreen", (0.14, 0.76, 0.22), roughness=0.28)
+    red = make_mat("AppleRed", (0.88, 0.06, 0.09), metallic=0.05, roughness=0.22)
+    stem_m = make_mat("StemBrown", (0.38, 0.20, 0.07), roughness=0.62)
+    leaf_m = make_mat("LeafGreen", (0.10, 0.82, 0.22), roughness=0.25, emission=(0.04, 0.26, 0.06), emission_strength=0.18)
     apple = add_sphere(seg=40, ring=28, mat=red)
     for v in apple.data.vertices:
         x, y, z = v.co.x, v.co.y, v.co.z
         r_xy = math.hypot(x, y)
-        # Plump upper shoulder, gently tapered lower half
-        profile = 1.12 - 0.14 * z + 0.10 * (1.0 - z * z)
-        # Smooth dimple at top and bottom poles
-        top_dip = 0.32 * math.exp(-((r_xy / 0.38) ** 2)) if z > 0.15 else 0.0
-        bot_dip = 0.20 * math.exp(-((r_xy / 0.34) ** 2)) if z < -0.15 else 0.0
-        z_new = z * 0.88 - top_dip + bot_dip
-        # Subtle 5-lobe apple crown contour
+        # Classic apple profile: full rounded shoulders (z > 0), tapered lower cup (z < 0)
+        profile = 0.88 + 0.15 * z + 0.08 * (1.0 - z * z)
+        top_dip = 0.38 * math.exp(-((r_xy / 0.44) ** 2)) if z > 0.10 else 0.0
+        bot_dip = 0.22 * math.exp(-((r_xy / 0.36) ** 2)) if z < -0.10 else 0.0
+        z_new = z * 0.96 - top_dip + bot_dip
         ang = math.atan2(y, x)
-        lobe = 1.0 + 0.025 * math.cos(5.0 * ang) * (r_xy ** 2)
+        lobe = 1.0 + 0.03 * math.cos(5.0 * ang) * (r_xy ** 2)
         v.co = Vector((x * profile * lobe, y * profile * lobe, z_new))
     apple.data.update()
     shade_smooth(apple)
-    # Compact curved stem tucked into the top dimple
-    stem = add_cyl(loc=(0.02, 0, 0.72), r=0.038, depth=0.26, rot=(0, 0.18, 0), mat=stem_m, verts=16)
+    # Prominent woody stem rising well above the top dimple
+    stem = add_cyl(loc=(0.02, 0.0, 0.96), r=0.068, depth=0.56, rot=(0.0, 0.22, 0.0), mat=stem_m, verts=16)
     for v in stem.data.vertices:
         if v.co.z > 0:
-            v.co.x += 0.04 * (v.co.z / 0.13) ** 2
+            v.co.x += 0.06 * (v.co.z / 0.28) ** 2
     stem.data.update()
-    # Sculpted pointed green leaf
-    leaf = add_sphere(loc=(0.24, 0.0, 0.78), scale=(0.26, 0.12, 0.035), rot=(0.25, -0.32, 0.15), mat=leaf_m, seg=24, ring=14)
+    # Vibrant green leaf arching out from the stem above the shoulder
+    leaf = add_sphere(loc=(0.34, 0.0, 1.08), scale=(0.42, 0.22, 0.08), rot=(0.38, -0.28, 0.12), mat=leaf_m, seg=24, ring=14)
     for v in leaf.data.vertices:
-        # Pointed leaf tips
-        taper = max(0.05, 1.0 - abs(v.co.x) * 0.85)
+        taper = max(0.08, 1.0 - abs(v.co.x) * 0.72)
         v.co.y *= taper
         v.co.z += 0.12 * (v.co.x ** 2)
     leaf.data.update()
-    finalize_and_save("pomme.blend", 1.32)
+    finalize_and_save("pomme.blend", 1.34)
 
 
 def build_fromage():

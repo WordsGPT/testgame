@@ -1,28 +1,28 @@
 class_name SRSEngine
 extends RefCounted
 
-## Hybrid SM-2 + Leitner Intra-Session & Cross-Session Spaced Repetition Engine (Édition CEFR A1–B1)
-## Tracks:
-## - 45 3D Vocabulary Objects across 9 CEFR A1–B1 Sectors (`cards`)
-## - 16 A2–B1 Grammar & Phonetic Breach Cards (`grammar_cards`)
-## - 12 A2 3D Spatial/Scale/Motion Modifier Drills (`modifier_cursor`)
-## - 16 DELF A2–B1 Situational Listening Scenarios (`scenario_cursor`)
+## Adaptive Stage-by-Stage & Spaced Repetition Engine for FRANC-TIREUR : Opération Écho (CEFR A1–B1)
+## Progression Design:
+## - Tier 0 (New Word — Learn & Shoot): Shows French + English + IPA tip + highlights the target drone with a green ring.
+## - Tier 1 (Recall — Read & Shoot): Shows French command + plays audio; player must recall meaning and shoot among 4 targets.
+## - Tier 2 (Pure Audio — Listen & Shoot): Audio-only! Player identifies the spoken French word by ear alone.
+## - Tier 3–4 (Mastery — Riddles, Negative Traps, A2 3D Modifiers & B1 Dialogues/Grammar).
 
 const SAVE_PATH := "user://srs_progress.json"
 const MAX_WORKING_SET := 5
 
 var global_step: int = 0
 # sector_filter:
-#  -1 = Adaptive Full Course (A1 -> A2 -> B1)
-#  -2 = CEFR A1 Track (Sectors 1-4)
-#  -3 = CEFR A2 Track (Sectors 5-7 + Modifiers + A2 Scenarios + A2 Grammar)
-#  -4 = CEFR B1 Track (Sectors 8-9 + B1 Scenarios + B1 Grammar)
-#  -5 = Special Mode: A2 3D Spatial & Comparative Modifiers
-#  -6 = Special Mode: DELF A2-B1 Situational Listening Scenarios
-#  -7 = Special Mode: A2-B1 Grammar & Phonetic Breaches (3D Crystals)
-#  0..8 = Specific Sector 1..9
+#  -1 = Guided Campaign (Auto-scales Stage 1 [A1] -> Stage 9 [B1] as you master each stage!)
+#  -2 = CEFR A1 Practice (Stages 1–4: 20 Beginner Words)
+#  -3 = CEFR A2 Practice (Stages 5–7: A2 Words + 3D Size/Speed Challenges + A2 Grammar)
+#  -4 = CEFR B1 Practice (Stages 8–9: B1 Words + DELF Dialogues + B1 Grammar)
+#  -5 = 3D Size, Speed & Position Challenges (A2 Spatial Modifiers)
+#  -6 = DELF Situational Listening Dialogues (A2–B1 Scenarios)
+#  -7 = Holographic Grammar & Phonetics (A2–B1 Data-Crystals)
+#  0..8 = Specific Stage 1..9
 var sector_filter: int = -1
-var l1_mode: int = 0 # 0 = Adaptive Fade (Recommended), 1 = Always Show English, 2 = Full French Immersion
+var l1_mode: int = 0 # 0 = Smart Adaptive Hints (Recommended), 1 = Always Show English, 2 = Hardcore French Only
 var cards: Dictionary = {} # vocab_id -> Dictionary
 var grammar_cards: Dictionary = {} # gram_id -> Dictionary
 var recent_history: Array[String] = []
@@ -80,7 +80,7 @@ func reset_progress() -> void:
 
 func save_progress() -> void:
 	var payload := {
-		"version": 2,
+		"version": 3,
 		"global_step": global_step,
 		"sector_filter": sector_filter,
 		"l1_mode": l1_mode,
@@ -127,9 +127,29 @@ func load_progress() -> void:
 				grammar_cards[gid][k] = saved_gram[gid][k]
 
 
+## Returns which Stage (0..8) the player is currently unlocking in Guided Campaign (-1)
+func get_active_campaign_sector() -> int:
+	for s_idx in range(VocabData.SECTORS.size()):
+		var s_ids := VocabData.get_sector_ids(s_idx)
+		var learned_in_sec := 0
+		for vid in s_ids:
+			if int(cards[vid]["tier"]) >= 1:
+				learned_in_sec += 1
+		if learned_in_sec < 4:
+			return s_idx
+	return VocabData.SECTORS.size() - 1
+
+
 func get_candidate_pool() -> Array[String]:
 	if sector_filter >= 0 and sector_filter < VocabData.SECTORS.size():
 		return VocabData.get_sector_ids(sector_filter)
+	if sector_filter == -1:
+		# Guided Campaign: includes all words up to and including the active Campaign Stage!
+		var active_sec := get_active_campaign_sector()
+		var pool: Array[String] = []
+		for s_idx in range(active_sec + 1):
+			pool.append_array(VocabData.get_sector_ids(s_idx))
+		return pool
 	if sector_filter == -2:
 		return VocabData.get_cefr_vocab_ids("A1")
 	if sector_filter == -3:
@@ -140,29 +160,12 @@ func get_candidate_pool() -> Array[String]:
 
 
 func get_words_to_calibrate(max_new: int = 3) -> Array[String]:
-	# Special non-vocab-calibration drill modes jump straight into combat waves
 	if sector_filter in [-5, -6, -7]:
 		return []
-
 	var pool := get_candidate_pool()
-	var active_learning := 0
-	for vid in pool:
-		var c: Dictionary = cards[vid]
-		if bool(c["seen"]) and int(c["tier"]) < 2:
-			active_learning += 1
-
-	var slots := maxi(0, MAX_WORKING_SET - active_learning)
-	var limit := mini(max_new, slots)
-	var seen_in_pool := 0
-	for vid in pool:
-		if bool(cards[vid]["seen"]):
-			seen_in_pool += 1
-	if seen_in_pool < 4:
-		limit = maxi(limit, 4 - seen_in_pool)
-
 	var to_intro: Array[String] = []
 	for vid in pool:
-		if to_intro.size() >= limit:
+		if to_intro.size() >= max_new:
 			break
 		if not bool(cards[vid]["calibrated"]):
 			to_intro.append(vid)
@@ -182,37 +185,48 @@ func mark_calibrated(vid: String) -> void:
 
 func select_next_target() -> String:
 	var pool := get_candidate_pool()
-	var seen_ids: Array[String] = []
+	# Keep a manageable working set of up to 3 unmastered (Tier 0) words at a time so pacing is smooth!
+	var active_t0 := 0
+	var working_pool: Array[String] = []
 	for vid in pool:
-		if bool(cards[vid]["seen"]):
-			seen_ids.append(vid)
+		var c: Dictionary = cards[vid]
+		if bool(c["seen"]):
+			working_pool.append(vid)
+			if int(c["tier"]) == 0:
+				active_t0 += 1
 
-	if seen_ids.size() < 4:
-		for vid in pool:
-			if not bool(cards[vid]["seen"]):
-				cards[vid]["seen"] = true
-				cards[vid]["calibrated"] = true
-				cards[vid]["due_step"] = global_step
-				seen_ids.append(vid)
-			if seen_ids.size() >= 4:
-				break
+	for vid in pool:
+		if active_t0 >= 3 and working_pool.size() >= 3:
+			break
+		if not bool(cards[vid]["seen"]):
+			cards[vid]["seen"] = true
+			cards[vid]["calibrated"] = true
+			cards[vid]["due_step"] = global_step
+			working_pool.append(vid)
+			active_t0 += 1
+
+	if working_pool.is_empty():
+		working_pool = pool.duplicate()
 
 	var last_id: String = recent_history.back() if not recent_history.is_empty() else ""
-	var best_id := seen_ids[0]
+	var best_id := working_pool[0]
 	var best_score := -999999.0
 
-	for vid in seen_ids:
+	for vid in working_pool:
 		var c: Dictionary = cards[vid]
 		var overdue := float(global_step - int(c["due_step"]))
 		var tier_val := int(c["tier"])
 		var score := 0.0
-		if overdue >= 0.0:
-			score += 100.0 + overdue * 12.0
+		if tier_val == 0 and int(c["correct"]) == 0:
+			# Prioritize introducing a new word in the working set
+			score += 115.0
+		elif overdue >= 0.0:
+			score += 105.0 + overdue * 12.0
 		else:
 			score += overdue * 8.0
-		score += float(4 - tier_val) * 6.0
-		score += float(mini(int(c["wrong"]), 5)) * 4.5
-		if vid == last_id and seen_ids.size() > 1:
+		score += float(4 - tier_val) * 7.0
+		score += float(mini(int(c["wrong"]), 5)) * 5.0
+		if vid == last_id and working_pool.size() > 1:
 			score -= 500.0
 		score += randf() * 2.5
 
@@ -226,12 +240,13 @@ func select_next_target() -> String:
 	return best_id
 
 
-## Builds the full Pedagogical Prompt Specification for a standard Vocabulary target word
+## Builds the full Pedagogical Prompt Specification for a Vocabulary target word
 func build_prompt_spec(target_id: String) -> Dictionary:
 	var item := VocabData.get_by_id(target_id)
 	var c: Dictionary = cards[target_id]
 	var tier := int(c["tier"])
 	var cefr_badge: String = str(item.get("cefr", "A1"))
+	var sec_num := int(item.get("sector", 0)) + 1
 
 	var use_female := (global_step % 2 == 1)
 	var speaker_name := "LT. DENISE" if use_female else "CMDT. HENRI"
@@ -244,44 +259,54 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 	var show_en_text := false
 
 	if tier == 0:
-		mode_tag = "%s • TIER 0 • CALIBRAGE" % cefr_badge
+		mode_tag = "STAGE %d (%s) • STEP 1: LEARN & SHOOT (NEW WORD)" % [sec_num, cefr_badge]
 		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = item["cmd_f"] if use_female else item["cmd_m"]
-		sub_en = "%s (%s) — %s" % [item["fr_def"], item["fr_indef"], item["en"]]
+		prompt_fr = "%s   →   %s = %s" % [
+			item["cmd_f"] if use_female else item["cmd_m"],
+			item["fr_def"],
+			item["en"],
+		]
+		sub_en = "Pronunciation: %s  •  Tip: %s  (Shoot the highlighted green target!)" % [item["ipa"], item["tip"]]
 		show_fr_text = true
 		show_en_text = (l1_mode != 2)
 	elif tier == 1:
-		mode_tag = "%s • TIER 1 • RECONNAISSANCE FR" % cefr_badge
+		mode_tag = "STAGE %d (%s) • STEP 2: READ & SHOOT (RECALL)" % [sec_num, cefr_badge]
 		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = item["cmd_f"] if use_female else item["cmd_m"]
-		sub_en = "%s — %s" % [item["fr_def"], item["en"]]
+		prompt_fr = "%s   (Target: « %s »)" % [
+			item["cmd_f"] if use_female else item["cmd_m"],
+			item["fr_def"],
+		]
+		sub_en = "%s = %s  •  %s" % [item["fr_def"], item["en"], item["ipa"]]
 		show_fr_text = true
 		show_en_text = (l1_mode == 1)
 	elif tier == 2:
-		mode_tag = "%s • TIER 2 • ÉCOUTE PURE (SANS TEXTE)" % cefr_badge
+		mode_tag = "STAGE %d (%s) • STEP 3: LISTEN & SHOOT (AUDIO ONLY)" % [sec_num, cefr_badge]
 		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = item["cmd_f"] if use_female else item["cmd_m"]
-		sub_en = "%s — %s" % [item["fr_def"], item["en"]]
+		prompt_fr = "%s   (« %s »)" % [
+			item["cmd_f"] if use_female else item["cmd_m"],
+			item["fr_def"],
+		]
+		sub_en = "%s = %s  •  %s" % [item["fr_def"], item["en"], item["ipa"]]
 		show_fr_text = false
 		show_en_text = (l1_mode == 1)
 	else:
 		var use_inhibit := ((int(c["correct"]) + global_step) % 2 == 1)
 		if use_inhibit:
-			mode_tag = "%s • TIER %d • PIÈGE NÉGATIF (NE TIREZ PAS...)" % [cefr_badge, tier]
+			mode_tag = "STAGE %d (%s) • STEP 4: NEGATION TRAP (NE TIREZ PAS...)" % [sec_num, cefr_badge]
 			audio_file = "inhibit_%s.ogg" % target_id
 			prompt_fr = item["inhibit"]
-			sub_en = "Avoid decoy! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
+			sub_en = "Watch out for 'Ne tirez pas' (Don't shoot)! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
 			required_decoy = item["inhibit_decoy"]
 			var item_idx := VocabData.get_all_ids().find(target_id)
 			speaker_name = "LT. DENISE" if (item_idx % 2 == 0) else "CMDT. HENRI"
 		else:
-			mode_tag = "%s • TIER %d • ÉNIGME DESCRIPTIVE" % [cefr_badge, tier]
+			mode_tag = "STAGE %d (%s) • STEP 4: FRENCH RIDDLE CLUE" % [sec_num, cefr_badge]
 			audio_file = "desc_%s.ogg" % target_id
 			prompt_fr = item["desc"]
-			sub_en = "%s → %s (%s)" % [item["desc_en"], item["fr_def"], item["en"]]
+			sub_en = "%s  →  Shoot: %s (%s)" % [item["desc_en"], item["fr_def"], item["en"]]
 			var item_idx := VocabData.get_all_ids().find(target_id)
 			speaker_name = "CMDT. HENRI" if (item_idx % 2 == 0) else "LT. DENISE"
-		show_fr_text = false
+		show_fr_text = (tier == 3 and l1_mode != 2)
 		show_en_text = (l1_mode == 1)
 
 	return {
@@ -309,6 +334,7 @@ func build_modifier_prompt_spec(force_index: int = -1) -> Dictionary:
 	var pool := get_candidate_pool()
 	var base_vid: String = pool[randi() % pool.size()] if not pool.is_empty() else "valise"
 	var item := VocabData.get_by_id(base_vid)
+	var first_cycle := (modifier_cursor <= VocabData.MODIFIER_DRILLS.size())
 
 	return {
 		"prompt_type": "MODIFIER",
@@ -316,15 +342,15 @@ func build_modifier_prompt_spec(force_index: int = -1) -> Dictionary:
 		"layout": drill["layout"],
 		"base_vocab_id": base_vid,
 		"target_id": "MOD_TARGET",
-		"tier": 2,
+		"tier": 1 if first_cycle else 2,
 		"speaker": drill["speaker"],
-		"mode_tag": "%s • MODIFICATEURS & ESPACE 3D" % drill["cefr"],
+		"mode_tag": "A2 3D CHALLENGE • SIZE, SPEED & POSITION",
 		"audio_file": drill["audio"],
 		"slow_audio_file": "",
 		"prompt_fr": drill["prompt_fr"],
-		"sub_en": "%s  |  %s" % [drill["prompt_en"], drill["rule"]],
+		"sub_en": "%s  •  Grammar Tip: %s" % [drill["prompt_en"], drill["rule"]],
 		"rule": drill["rule"],
-		"show_fr_text": (l1_mode == 1),
+		"show_fr_text": first_cycle or (l1_mode == 1),
 		"show_en_text": (l1_mode == 1),
 		"required_decoy": "",
 		"base_fr": item.get("fr_def", base_vid),
@@ -355,15 +381,15 @@ func build_scenario_prompt_spec(force_index: int = -1) -> Dictionary:
 		"scenario_id": sc["id"],
 		"target_id": tid,
 		"decoys": sc["decoys"],
-		"tier": 3,
+		"tier": 2,
 		"speaker": sc["speaker"],
-		"mode_tag": "DELF %s • COMPRÉHENSION ORALE EN CONTEXTE" % sc["cefr"],
+		"mode_tag": "DELF %s DIALOGUE • SITUATIONAL LISTENING" % sc["cefr"],
 		"audio_file": sc["audio"],
 		"slow_audio_file": "",
 		"prompt_fr": "%s\n→ %s" % [sc["prompt_fr"], sc["question_fr"]],
 		"question_fr": sc["question_fr"],
-		"sub_en": "%s  →  Cible : %s (%s)" % [sc["prompt_en"], item["fr_def"], item["en"]],
-		"show_fr_text": false,
+		"sub_en": "%s  →  Shoot: %s (%s)" % [sc["prompt_en"], item["fr_def"], item["en"]],
+		"show_fr_text": (l1_mode == 1),
 		"show_en_text": (l1_mode == 1),
 		"required_decoy": sc["decoys"][0],
 	}
@@ -428,12 +454,12 @@ func build_grammar_prompt_spec(force_gram_id: String = "") -> Dictionary:
 		"options": g["options"],
 		"tier": tier,
 		"speaker": g["speaker"],
-		"mode_tag": "%s • BRÈCHE GRAMMATICALE : %s" % [g["cefr"], g["category"]],
+		"mode_tag": "%s GRAMMAR CRYSTAL • %s" % [g["cefr"], g["category"]],
 		"audio_file": g["audio"],
 		"slow_audio_file": "",
 		"prompt_fr": g["sentence_cloze"],
 		"sentence_full": g["sentence_full"],
-		"sub_en": "%s  |  Règle : %s" % [g["en"], g["rule"]],
+		"sub_en": "\"%s\"  •  Rule: %s" % [g["en"], g["rule"]],
 		"rule": g["rule"],
 		"en": g["en"],
 		"show_fr_text": true,
@@ -442,7 +468,7 @@ func build_grammar_prompt_spec(force_gram_id: String = "") -> Dictionary:
 	}
 
 
-## Master Wave Prompt Router: weaves Vocabulary, 3D Modifiers, DELF Scenarios & Grammar Crystals!
+## Master Wave Prompt Router: scales smoothly with the player's actual Stage!
 func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
 	if sector_filter == -5:
 		return build_modifier_prompt_spec()
@@ -451,8 +477,17 @@ func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
 	if sector_filter == -7:
 		return build_grammar_prompt_spec()
 
-	# In CEFR A2 (-3), CEFR B1 (-4), or Full Adaptive (-1), weave the 4 pedagogical pillars across the 6-prompt wave:
-	if sector_filter in [-1, -3, -4]:
+	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else sector_filter
+
+	# In CEFR A2 (-3) or Stages 5–7 (effective_sec 4..6): weave 3D Size/Speed Challenge on shot 5 and Grammar on shot 6
+	if sector_filter == -3 or (effective_sec >= 4 and effective_sec <= 6):
+		if prompt_in_wave == 5:
+			return build_modifier_prompt_spec()
+		if prompt_in_wave == 6:
+			return build_grammar_prompt_spec()
+
+	# In CEFR B1 (-4) or Stages 8–9 (effective_sec >= 7): weave 3D Modifier on shot 4, DELF Scenario on shot 5, Grammar on shot 6
+	if sector_filter == -4 or effective_sec >= 7:
 		if prompt_in_wave == 4:
 			return build_modifier_prompt_spec()
 		if prompt_in_wave == 5:
@@ -460,20 +495,19 @@ func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
 		if prompt_in_wave == 6:
 			return build_grammar_prompt_spec()
 
-	# In specific A2/B1 Sectors (4..8), include a 3D Modifier on prompt 5 and Grammar/Scenario on prompt 6:
-	if sector_filter >= 4 and sector_filter <= 8:
-		if prompt_in_wave == 5:
-			return build_modifier_prompt_spec()
-		if prompt_in_wave == 6:
-			return build_grammar_prompt_spec()
+	# In Stages 2–4 (effective_sec 1..3), add a fun 3D Size/Speed bonus challenge on the final shot of the wave (shot 6)
+	if effective_sec >= 1 and effective_sec <= 3 and prompt_in_wave == 6:
+		return build_modifier_prompt_spec()
 
 	var target_id := select_next_target()
 	return build_prompt_spec(target_id)
 
 
-func select_distractors(target_id: String, count: int = 4, required_decoy: String = "") -> Array[String]:
+func select_distractors(target_id: String, count: int = 3, required_decoy: String = "") -> Array[String]:
 	var distractors: Array[String] = []
-	if required_decoy != "" and required_decoy != target_id:
+	var pool := get_candidate_pool()
+
+	if required_decoy != "" and required_decoy != target_id and cards.has(required_decoy):
 		distractors.append(required_decoy)
 
 	if cards.has(target_id):
@@ -485,15 +519,15 @@ func select_distractors(target_id: String, count: int = 4, required_decoy: Strin
 			if ks != target_id and not distractors.has(ks) and distractors.size() < count:
 				distractors.append(ks)
 
+	# Only pull built-in confusables if they belong to the current candidate pool or have already been seen!
 	var item := VocabData.get_by_id(target_id)
 	var built_in: Array = item.get("confusables", [])
 	for b in built_in:
 		var bs := str(b)
 		if bs != target_id and cards.has(bs) and not distractors.has(bs) and distractors.size() < count:
-			if bool(cards[bs]["seen"]) or int(cards[target_id]["tier"]) >= 2 or sector_filter < 0:
+			if pool.has(bs) or bool(cards[bs]["seen"]):
 				distractors.append(bs)
 
-	var pool := get_candidate_pool()
 	var shuffled_seen: Array[String] = []
 	var shuffled_rest: Array[String] = []
 	for vid in pool:
@@ -533,6 +567,7 @@ func record_result(target_id: String, clean_first_try: bool, used_assistance: bo
 
 	var c: Dictionary = cards[target_id]
 	c["seen"] = true
+	c["calibrated"] = true
 	c["last_timestamp"] = int(Time.get_unix_time_from_system())
 	var prev_tier := int(c["tier"])
 
@@ -558,17 +593,19 @@ func record_result(target_id: String, clean_first_try: bool, used_assistance: bo
 		c["correct"] = int(c["correct"]) + 1
 		c["streak"] = int(c["streak"]) + 1
 		c["ease"] = maxf(1.3, float(c["ease"]) - 0.05)
-		c["interval"] = 3
-		c["due_step"] = global_step + 3
+		if prev_tier == 0:
+			c["tier"] = 1
+		c["interval"] = 2
+		c["due_step"] = global_step + 2
 	else:
 		c["correct"] = int(c["correct"]) + 1
 		c["streak"] = int(c["streak"]) + 1
 		c["ease"] = minf(3.0, float(c["ease"]) + 0.10)
 		var new_tier := mini(4, prev_tier + 1)
 		c["tier"] = new_tier
-		var base_intervals := [2, 3, 6, 11, 22]
+		var base_intervals := [1, 2, 5, 10, 20]
 		var base_iv: int = base_intervals[new_tier]
-		var scaled_iv := maxi(2, int(round(float(base_iv) * (float(c["ease"]) / 2.3))))
+		var scaled_iv := maxi(1, int(round(float(base_iv) * (float(c["ease"]) / 2.3))))
 		c["interval"] = scaled_iv
 		c["due_step"] = global_step + scaled_iv
 
@@ -656,4 +693,5 @@ func get_summary_stats() -> Dictionary:
 		"gram_mastered": gram_mastered,
 		"due_now": due_cnt,
 		"accuracy": acc,
+		"active_stage": get_active_campaign_sector() + 1,
 	}

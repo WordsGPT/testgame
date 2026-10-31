@@ -119,15 +119,6 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 
 	if controls_enabled:
-		# Keyboard camera turn fallback (Q / E)
-		var turn_axis := 0.0
-		if Input.is_physical_key_pressed(KEY_Q):
-			turn_axis += 1.0
-		if Input.is_physical_key_pressed(KEY_E):
-			turn_axis -= 1.0
-		if absf(turn_axis) > 0.01:
-			rotate_y(turn_axis * KEY_TURN_SPEED * delta)
-
 		if Input.is_physical_key_pressed(KEY_SPACE) and is_on_floor():
 			velocity.y = JUMP_VELOCITY
 
@@ -136,10 +127,19 @@ func _physics_process(delta: float) -> void:
 			in_vec.y -= 1.0
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
 			in_vec.y += 1.0
-		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+		if Input.is_physical_key_pressed(KEY_A):
 			in_vec.x -= 1.0
-		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+		if Input.is_physical_key_pressed(KEY_D):
 			in_vec.x += 1.0
+
+		# Arrow keys Left/Right allow smooth camera turning on laptops without interfering with E/Q hotkeys
+		var turn_axis := 0.0
+		if Input.is_physical_key_pressed(KEY_LEFT):
+			turn_axis += 1.0
+		if Input.is_physical_key_pressed(KEY_RIGHT):
+			turn_axis -= 1.0
+		if absf(turn_axis) > 0.01:
+			rotate_y(turn_axis * KEY_TURN_SPEED * delta)
 		if in_vec.length_squared() > 1.0:
 			in_vec = in_vec.normalized()
 

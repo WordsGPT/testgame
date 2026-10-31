@@ -65,8 +65,9 @@ func setup(p_vocab_id: String, pos: Vector3, face_target: Vector3) -> void:
 
 	_card_label = Label3D.new()
 	_card_label.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
-	_card_label.position = Vector3(0, 2.38, 0)
+	_card_label.position = Vector3(0, 2.75, 0)
 	_card_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_card_label.no_depth_test = true
 	_card_label.font_size = 34
 	_card_label.outline_size = 10
 	_card_label.outline_modulate = Color(0.03, 0.05, 0.11, 0.95)
@@ -94,14 +95,14 @@ func set_vocab(new_id: String) -> void:
 		var v_res := load(model_path) as PackedScene
 		if v_res:
 			var v_inst := v_res.instantiate() as Node3D
-			v_inst.scale = Vector3.ONE * 0.78
+			v_inst.scale = Vector3.ONE * 1.18
 			_vocab_holder.add_child(v_inst)
 
 	var item := VocabData.get_by_id(vocab_id)
 	if not item.is_empty():
-		var g_tag := "fém." if String(item["gender"]).begins_with("f") else "masc."
-		var g_col := Color(1.0, 0.68, 0.82) if g_tag == "fém." else Color(0.58, 0.86, 1.0)
-		_card_label.text = "%s (%s)\n%s  •  %s" % [item["fr_def"], g_tag, item["ipa"], item["en"]]
+		var g_tag := "fem." if String(item["gender"]).begins_with("f") else "masc."
+		var g_col := Color(1.0, 0.72, 0.86) if g_tag == "fem." else Color(0.58, 0.90, 1.0)
+		_card_label.text = "%s (%s)\n%s  •  %s" % [item["fr_def"], g_tag, item["en"], item["ipa"]]
 		_card_label.modulate = g_col
 		_ring_mat.albedo_color = g_col
 
