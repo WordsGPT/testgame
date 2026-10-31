@@ -1,0 +1,227 @@
+name: Build & Publish Franc-Tireur (Web Pages + Desktop Releases)
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish (default: v1.0.0-cefr-b1)'
+        required: false
+        default: 'v1.0.0-cefr-b1'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "build-and-publish-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+  BLENDER_VERSION: "4.2.23"
+  BLENDER_MAJOR: "4.2"
+
+jobs:
+  build-multiplatform:
+    name: Build Web, Linux, Windows & macOS
+    runs-on: ubuntu-latest
+    outputs:
+      project_dir: ${{ steps.detect.outputs.project_dir }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect Godot project root
+        id: detect
+        run: |
+          if [ -f "project.godot" ]; then
+            echo "project_dir=." >> "$GITHUB_OUTPUT"
+          elif [ -f "franc_tireur/project.godot" ]; then
+            echo "project_dir=franc_tireur" >> "$GITHUB_OUTPUT"
+          else
+            echo "Error: project.godot not found!"
+            exit 1
+          fi
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates curl wget unzip zip xz-utils \
+            libfontconfig1 libxcursor1 libxinerama1 libxrandr2 libxi6 \
+            libgl1 libglu1-mesa libxkbcommon0 libxxf86vm1 libxfixes3 libsm6 libice6
+
+      - name: Cache Godot 4.7.2 & Blender 4.2 LTS
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/godot-bin
+            /tmp/blender-bin
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-${{ env.GODOT_VERSION }}-blender-${{ env.BLENDER_VERSION }}-linux-x86_64
+
+      - name: Setup Blender ${{ env.BLENDER_VERSION }} LTS & Godot ${{ env.GODOT_VERSION }}
+        run: |
+          mkdir -p /tmp/godot-bin /tmp/blender-bin ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          if [ ! -f "/tmp/blender-bin/blender" ]; then
+            wget -q "https://download.blender.org/release/Blender${{ env.BLENDER_MAJOR }}/blender-${{ env.BLENDER_VERSION }}-linux-x64.tar.xz" -O /tmp/blender.tar.xz
+            tar -xf /tmp/blender.tar.xz -C /tmp/blender-bin --strip-components=1
+            rm -f /tmp/blender.tar.xz
+          fi
+          sudo ln -sf /tmp/blender-bin/blender /usr/local/bin/blender
+          blender --version | head -n 1
+
+          if [ ! -f "/tmp/godot-bin/godot" ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+            unzip -q -o /tmp/godot.zip -d /tmp/godot-bin
+            mv "/tmp/godot-bin/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /tmp/godot-bin/godot
+            chmod +x /tmp/godot-bin/godot
+            rm -f /tmp/godot.zip
+          fi
+          sudo ln -sf /tmp/godot-bin/godot /usr/local/bin/godot
+          godot --version
+
+          if [ ! -f "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/web_nothreads_release.wasm32.zip" ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O /tmp/templates.tpz
+            unzip -q -o /tmp/templates.tpz -d /tmp/templates
+            mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/"
+            rm -rf /tmp/templates /tmp/templates.tpz
+          fi
+
+      - name: Configure Godot Editor Blender Path & Import 3D/Audio Assets
+        run: |
+          PROJ="${{ steps.detect.outputs.project_dir }}"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.7.tres" << 'EOF'
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          filesystem/import/blender/blender_path = "/usr/local/bin/blender"
+          EOF
+
+          # Regenerate 3D .blend models if not already present
+          if [ ! -f "$PROJ/assets/models/holo_crystal.blend" ]; then
+            blender --background --python "$PROJ/tools/generate_blender_assets.py"
+          fi
+
+          # Run headless editor pass to import all .blend and .ogg assets
+          godot --headless --editor --quit --path "$PROJ"
+
+      - name: Export Web, Linux, Windows & macOS Builds
+        run: |
+          PROJ="${{ steps.detect.outputs.project_dir }}"
+          mkdir -p /tmp/dist/web /tmp/dist/linux /tmp/dist/windows /tmp/dist/macos
+
+          echo ">>> Exporting Web (HTML5 / WebGL2)..."
+          godot --headless --path "$PROJ" --export-release "Web" /tmp/dist/web/index.html
+          rm -f /tmp/dist/web/*.import
+          touch /tmp/dist/web/.nojekyll
+
+          echo ">>> Exporting Linux x86_64..."
+          godot --headless --path "$PROJ" --export-release "Linux" /tmp/dist/linux/franc_tireur.x86_64
+          rm -f /tmp/dist/linux/*.import
+          chmod +x /tmp/dist/linux/franc_tireur.x86_64
+          cat > /tmp/dist/linux/play-franc-tireur.sh << 'EOF'
+          #!/usr/bin/env bash
+          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          exec "$DIR/franc_tireur.x86_64" "$@"
+          EOF
+          chmod +x /tmp/dist/linux/play-franc-tireur.sh
+
+          echo ">>> Exporting Windows Desktop x86_64..."
+          godot --headless --path "$PROJ" --export-release "Windows Desktop" /tmp/dist/windows/FrancTireur.exe
+          rm -f /tmp/dist/windows/*.import
+
+          echo ">>> Exporting macOS Universal..."
+          godot --headless --path "$PROJ" --export-release "macOS" /tmp/dist/macos/FrancTireur-macOS-Universal.zip
+
+          mkdir -p /tmp/releases
+          (cd /tmp/dist/web && zip -q -r /tmp/releases/FrancTireur-Web-HTML5.zip .)
+          (cd /tmp/dist/linux && zip -q -r /tmp/releases/FrancTireur-Linux-x86_64.zip .)
+          (cd /tmp/dist/windows && zip -q -r /tmp/releases/FrancTireur-Windows-x86_64.zip .)
+          cp /tmp/dist/macos/FrancTireur-macOS-Universal.zip /tmp/releases/FrancTireur-macOS-Universal.zip
+          ls -lh /tmp/releases/
+
+      - name: Upload Release Packages as Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrancTireur-Multiplatform-Builds
+          path: /tmp/releases/*.zip
+          retention-days: 30
+
+      - name: Upload Web Build for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/dist/web
+
+  deploy-pages:
+    name: Publish Ready-to-Play Web Build to GitHub Pages
+    needs: build-multiplatform
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  publish-release:
+    name: Publish Downloadable Builds to GitHub Releases
+    needs: build-multiplatform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Built Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: FrancTireur-Multiplatform-Builds
+          path: /tmp/releases
+
+      - name: Determine Release Tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ github.event.inputs.release_tag }}" ]]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          else
+            TAG="v1.0.0-cefr-b1"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Franc-Tireur : Opération Écho (${{ steps.tag.outputs.tag }}) — CEFR A1–B1"
+          body: |
+            ## 🎯 Franc-Tireur : Opération Écho — CEFR A1, A2 & B1 Edition
+            **3D French Tactical Listening, Spatial Modifier & Grammar Sharpshooter** built with **Godot 4.7.2** and **Blender 4.2 LTS**.
+
+            ### 🌐 Play Instantly in Browser
+            If GitHub Pages is enabled on this repository (Settings → Pages → Source: **GitHub Actions**), you can play directly in your browser without downloading anything!
+
+            ### 📦 Ready-to-Play Desktop Downloads
+            - 🪟 **Windows (64-bit)**: Download `FrancTireur-Windows-x86_64.zip`, extract both `FrancTireur.exe` and `FrancTireur.pck` into the same folder, and run `FrancTireur.exe`.
+            - 🐧 **Linux (x86_64)**: Download `FrancTireur-Linux-x86_64.zip`, extract, and run `./play-franc-tireur.sh` (or `./franc_tireur.x86_64`).
+            - 🍎 **macOS (Universal Apple Silicon & Intel)**: Download `FrancTireur-macOS-Universal.zip`, extract `Franc-Tireur.app`, right-click → Open.
+            - 🌐 **Self-Hosted Web Build**: Download `FrancTireur-Web-HTML5.zip` and serve with `python3 -m http.server 8080`.
+
+            ### ✨ Curriculum Features (CEFR A1 → A2 → B1)
+            - **45 Sculpted 3D Vocabulary Models across 9 Thematic Sectors** (A1 Food/Home, A1+ Medieval/Nature, A2 Travel/Tech/City, B1 Health/Environment/Work).
+            - **329 Neural French Voice Clips (`fr-FR-HenriNeural` & `fr-FR-DeniseNeural`)** with normal, slow-articulated, and context clue modes.
+            - **A2 3D Spatial, Scale & Speed Modifiers**: Shoot the target that is *le plus grand*, *le plus petit*, *le plus rapide*, *immobile*, *le plus haut*, *au milieu*, *à gauche*, or *à droite*.
+            - **DELF A2–B1 Situational Dialogues**: Listen to multi-clause announcements, weather forecasts, and emergency calls and hit the implied 3D object.
+            - **A2–B1 Holographic Data-Crystal Grammar Breaches**: Master *passé composé vs imparfait*, *direct/indirect object pronouns (`le/la/les/lui/leur/y/en`)*, *si-clauses & conditionnel*, *subjonctif présent*, and *silent `-ent` / liaison `/z/`* phonetic traps.
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/releases/FrancTireur-Windows-x86_64.zip
+            /tmp/releases/FrancTireur-Linux-x86_64.zip
+            /tmp/releases/FrancTireur-macOS-Universal.zip
+            /tmp/releases/FrancTireur-Web-HTML5.zip

@@ -1,0 +1,8 @@
+# Godot 4+ ignore patterns
+.godot/
+build/
+*.tmp
+*.log
+.DS_Store
+__pycache__/
+*.blend1
