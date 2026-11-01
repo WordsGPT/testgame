@@ -215,13 +215,10 @@ func set_beacon(enabled: bool, color: Color = Color(1.0, 0.84, 0.18)) -> void:
 		_beacon_mat.albedo_color = color
 
 
-func show_calibration_card(fr_text: String, en_text: String, sound_like: String = "") -> void:
+func show_calibration_card(fr_text: String, en_text: String, _note: String = "") -> void:
 	is_calibrated_target = true
 	set_beacon(true, Color(0.22, 0.94, 0.52))
-	if sound_like != "":
-		_badge_label.text = "★ %s = %s\nSounds like: \"%s\"" % [fr_text, en_text, sound_like]
-	else:
-		_badge_label.text = "★ %s = %s" % [fr_text, en_text]
+	_badge_label.text = "★ %s\n(%s)" % [fr_text, en_text]
 	_badge_label.modulate = Color(0.98, 0.95, 0.78)
 	_badge_label.visible = true
 	_badge_timer = 0.0

@@ -269,14 +269,14 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 		mode_tag = "STAGE %d • LEVEL 2: READ & SHOOT" % sec_num
 		audio_file = "word_%s.ogg" % target_id
 		prompt_fr = "Shoot:  %s" % item["fr_def"]
-		sub_en = "Sounds like: \"%s\"   •   (%s)" % [item["ipa"], item["en"]]
+		sub_en = "%s   •   %s" % [item["en"], item["tip"]]
 		show_fr_text = true
 		show_en_text = (l1_mode == 1)
 	elif tier == 2:
 		mode_tag = "STAGE %d • LEVEL 3: LISTEN & SHOOT" % sec_num
 		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
 		prompt_fr = "Shoot:  %s" % item["fr_def"]
-		sub_en = "Sounds like: \"%s\"   •   (%s)" % [item["ipa"], item["en"]]
+		sub_en = "%s   •   %s" % [item["en"], item["tip"]]
 		show_fr_text = false
 		show_en_text = (l1_mode == 1)
 	else:

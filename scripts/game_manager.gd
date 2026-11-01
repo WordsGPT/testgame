@@ -817,7 +817,7 @@ func _populate_lexicon_grid() -> void:
 		r1.add_child(play_b)
 
 		var en_lbl := Label.new()
-		en_lbl.text = "Sounds like: \"%s\"" % item["ipa"]
+		en_lbl.text = str(item["ipa"])
 		en_lbl.clip_text = true
 		en_lbl.add_theme_font_size_override("font_size", 12)
 		en_lbl.add_theme_color_override("font_color", Color(0.98, 0.84, 0.46))
@@ -1028,7 +1028,7 @@ func _focus_next_calibration_target() -> void:
 	speaker_lbl.text = "♪ LT. DENISE (STAGE INTRO %s)" % item.get("cefr", "A1")
 	mode_tag_lbl.text = "NEW WORD SPOTLIGHT  •  SHOOT TO LEARN (%d left)" % calibration_queue.size()
 	prompt_main_lbl.text = "« %s  •  %s »   =   %s" % [item["fr_indef"], item["fr_def"], item["en"]]
-	prompt_sub_lbl.text = "Pronunciation: %s   |   Tip: %s" % [item["ipa"], item["tip"]]
+	prompt_sub_lbl.text = str(item["tip"])
 	timer_bar.value = 100.0
 	audio.play_voice("word_%s.ogg" % current_calib_id)
 
@@ -1391,7 +1391,7 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 				srs.record_result(target_tag, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 				var t_item := VocabData.get_by_id(target_tag)
 				prompt_main_lbl.text = "✓ %s  =  %s" % [t_item["fr_def"], t_item["en"]]
-				prompt_sub_lbl.text = "Sounds like: \"%s\"" % t_item["ipa"]
+				prompt_sub_lbl.text = str(t_item["tip"])
 
 			_update_stats_hud()
 			transition_delay = 1.05
@@ -1428,8 +1428,8 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 				_highlight_true_target(target_tag)
 				_play_slow_assist()
 				_show_feedback(
-					"✗ That was %s (%s).  →  ★ Shoot the GOLD target: %s = %s (\"%s\")" % [
-						hit_item["fr_def"], hit_item["en"], true_item["fr_def"], true_item["en"], true_item["ipa"]
+					"✗ That was %s (%s).  →  ★ Shoot the GOLD target: %s = %s" % [
+						hit_item["fr_def"], hit_item["en"], true_item["fr_def"], true_item["en"]
 					],
 					false
 				)
@@ -1672,7 +1672,7 @@ func _run_automated_verification() -> void:
 		d.setup(demo_ids[i], Vector3(demo_xs[i], 2.15, -0.5), player.global_position, 0.0, 1.18)
 		d.set_slot_badge(i + 1)
 		if demo_ids[i] == "pomme":
-			d.show_calibration_card("la pomme", "the apple", "lah PUM")
+			d.show_calibration_card("la pomme", "the apple")
 		active_drones.append(d)
 	_refresh_prompt_hud()
 	player.look_toward_point(Vector3(0.0, 2.15, -0.5))
@@ -1723,7 +1723,7 @@ func _run_automated_verification() -> void:
 	active_drones[0].flash_wrong_hit()
 	_highlight_true_target("pain")
 	_play_slow_assist()
-	_show_feedback("✗ That was la pomme (the apple).  →  ★ Shoot the GOLD target: le pain = the bread (\"luh PAN\")", false)
+	_show_feedback("✗ That was la pomme (the apple).  →  ★ Shoot the GOLD target: le pain = the bread", false)
 	player.look_toward_point(Vector3(0.0, 2.15, -0.6))
 	for i in range(6):
 		await get_tree().process_frame

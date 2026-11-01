@@ -101,7 +101,7 @@ func set_vocab(new_id: String) -> void:
 	var item := VocabData.get_by_id(vocab_id)
 	if not item.is_empty():
 		var g_col := Color(0.98, 0.88, 0.56)
-		_card_label.text = "%s\n%s  •  \"%s\"" % [item["fr_def"], item["en"], item["ipa"]]
+		_card_label.text = "%s\n%s" % [item["fr_def"], item["en"]]
 		_card_label.modulate = g_col
 		_ring_mat.albedo_color = Color(0.92, 0.72, 0.24)
 
