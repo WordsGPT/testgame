@@ -8,7 +8,7 @@ extends RefCounted
 ## - Tier 2 (Pure Audio — Listen & Shoot): Audio-only! Player identifies the spoken French word by ear alone.
 ## - Tier 3–4 (Mastery — Riddles, Negative Traps, A2 3D Modifiers & B1 Dialogues/Grammar).
 
-const SAVE_PATH := "user://srs_progress.json"
+const SAVE_PATH := "user://bonjour_paris_v5.json"
 const MAX_WORKING_SET := 5
 
 var global_step: int = 0
@@ -261,45 +261,26 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 	var show_en_text := false
 
 	if tier == 0:
-		mode_tag = "MAP %d • LEVEL 1: NEW WORD & PHRASE" % sec_num
+		mode_tag = "CHAPTER %d • STEP 1: LEARN & FETCH WORD" % sec_num
 		audio_file = "word_%s.ogg" % target_id
 		prompt_fr = "★ %s  =  %s" % [item["fr_def"], item["en"]]
 		sub_en = "« %s » (%s)" % [item.get("phrase_fr", ""), item.get("phrase_en", "")]
 		show_fr_text = true
 		show_en_text = true
 	elif tier == 1:
-		mode_tag = "MAP %d • LEVEL 2: EVERYDAY PHRASE" % sec_num
+		mode_tag = "CHAPTER %d • STEP 2: EVERYDAY PHRASE ORDER" % sec_num
 		audio_file = "phrase_%s.ogg" % target_id
 		prompt_fr = "« %s »" % str(item.get("phrase_fr", item["fr_def"]))
-		sub_en = "%s   •   Shoot: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
+		sub_en = "%s   •   Bring: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
 		show_fr_text = true
-		show_en_text = (l1_mode == 1)
-	elif tier == 2:
-		mode_tag = "MAP %d • LEVEL 3: LISTEN TO PHRASE" % sec_num
-		audio_file = ("phrase_%s.ogg" % target_id) if use_female else ("word_%s.ogg" % target_id)
-		prompt_fr = "« %s »" % str(item.get("phrase_fr", item["fr_def"]))
-		sub_en = "%s   •   Shoot: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
-		show_fr_text = false
-		show_en_text = (l1_mode == 1)
+		show_en_text = true
 	else:
-		var use_inhibit := ((int(c["correct"]) + global_step) % 2 == 1)
-		if use_inhibit:
-			mode_tag = "MAP %d • LEVEL 4: DECOY TRAP" % sec_num
-			audio_file = "inhibit_%s.ogg" % target_id
-			prompt_fr = item["inhibit"]
-			sub_en = "'Pas...' means NOT that one! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
-			required_decoy = item["inhibit_decoy"]
-			var item_idx := VocabData.get_all_ids().find(target_id)
-			speaker_name = "DENISE" if (item_idx % 2 == 0) else "HENRI"
-		else:
-			mode_tag = "MAP %d • LEVEL 4: SPOKEN PHRASE" % sec_num
-			audio_file = "phrase_%s.ogg" % target_id
-			prompt_fr = "« %s »" % str(item.get("phrase_fr", item["desc"]))
-			sub_en = "%s  →  %s (%s)" % [str(item.get("phrase_en", item["desc_en"])), item["fr_def"], item["en"]]
-			var item_idx := VocabData.get_all_ids().find(target_id)
-			speaker_name = "HENRI" if (item_idx % 2 == 0) else "DENISE"
-		show_fr_text = (tier == 3 and l1_mode != 2)
-		show_en_text = (l1_mode == 1)
+		mode_tag = "CHAPTER %d • STEP 3: LISTEN & DELIVER" % sec_num
+		audio_file = "phrase_%s.ogg" % target_id
+		prompt_fr = "« %s »" % str(item.get("phrase_fr", item["fr_def"]))
+		sub_en = "%s   •   Bring: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
+		show_fr_text = true
+		show_en_text = (tier <= 2 or l1_mode == 1)
 
 	return {
 		"prompt_type": "VOCAB",
@@ -541,7 +522,40 @@ func build_daily_phrase_prompt_spec(active_sector: int = -1, force_index: int = 
 	}
 
 
-## Master Wave Prompt Router: scales smoothly with the player's actual Map & Wave!
+## Builds a 2-Item Combo Delivery Order Spec for the active Parisian neighborhood!
+func build_combo_prompt_spec(active_sector: int = 0) -> Dictionary:
+	var sec := clampi(active_sector, 0, VocabData.SECTORS.size() - 1)
+	var s_info: Dictionary = VocabData.SECTORS[sec]
+	var c_ids: Array = s_info.get("combo_ids", ["tasse", "pain"])
+	var it1 := VocabData.get_by_id(str(c_ids[0]))
+	var it2 := VocabData.get_by_id(str(c_ids[1]))
+	return {
+		"prompt_type": "COMBO",
+		"combo_ids": c_ids.duplicate(),
+		"target_id": str(c_ids[0]),
+		"tier": 1,
+		"speaker": "CHLOÉ",
+		"mode_tag": "CHAPTER %d • STEP 4: 2-ITEM COMBO ORDER" % (sec + 1),
+		"audio_file": str(s_info.get("combo_audio", "combo_0.ogg")),
+		"slow_audio_file": "",
+		"prompt_fr": "« %s »" % str(s_info.get("combo_fr", "Une tasse de café et du pain, s'il vous plaît !")),
+		"prompt_en": str(s_info.get("combo_en", "A cup of coffee and some bread, please!")),
+		"sub_en": "\"%s\"   •   Grab BOTH: %s (%s) + %s (%s)!" % [
+			str(s_info.get("combo_en", "")),
+			str(it1.get("fr_def", c_ids[0])), str(it1.get("en", "")),
+			str(it2.get("fr_def", c_ids[1])), str(it2.get("en", "")),
+		],
+		"chloe_tip": "« %s » (%s) — Prends les 2 objets sur ton plateau et apporte-les à la table !" % [
+			str(s_info.get("combo_fr", "")),
+			str(s_info.get("combo_en", ""))
+		],
+		"show_fr_text": true,
+		"show_en_text": true,
+		"required_decoy": "",
+	}
+
+
+## Master Wave Prompt Router: scales smoothly with the player's actual Chapter & Round!
 func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dictionary:
 	if sector_filter == -5:
 		return build_modifier_prompt_spec()
@@ -553,18 +567,18 @@ func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dicti
 	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else clampi(sector_filter, 0, 8)
 	var dir_lvl := clampi(1 + effective_sec + (current_wave - 1), 1, 3)
 
-	# Step 4 of every round: Real Day-to-Day Conversational Phrase Exchange for the current Map!
+	# Step 4 of every chapter: 2-Item Combo Order (Carry 2 items on your tray & serve!)
 	if prompt_in_wave == 4:
-		return build_daily_phrase_prompt_spec(effective_sec)
+		return build_combo_prompt_spec(effective_sec)
 
-	# Step 5 of every round: Physical 3D Directional Movement (1-step in Wave 1 Map 1, scaling to 2-step & 3-step sequences!)
+	# Step 5 of every chapter: Physical Street Directional Navigation (1-step -> 2-step -> 3-step sequences!)
 	if prompt_in_wave == 5:
 		var step5_lvl := 1 if (effective_sec == 0 and current_wave == 1) else clampi(dir_lvl, 2, 3)
 		return build_direction_prompt_spec(step5_lvl)
 
-	# Step 6 (Round Finale): Spoken Phrase Comprehension or 3D Size/Position Challenge!
-	if prompt_in_wave == 6 and effective_sec >= 1 and (current_wave % 2 == 0):
-		return build_modifier_prompt_spec()
+	# Step 6 (Chapter Finale): Real Day-to-Day Conversational Phrase Exchange!
+	if prompt_in_wave == 6:
+		return build_daily_phrase_prompt_spec(effective_sec)
 
 	var target_id := select_next_target()
 	return build_prompt_spec(target_id)

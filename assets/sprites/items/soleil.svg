@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFDF0"/>
+      <stop offset="100%" stop-color="#F7E8B5"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFE89E"/>
+      <stop offset="100%" stop-color="#C89228"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
+  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
+  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
+  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
+  
+      <g stroke="#D97B16" stroke-width="4.5" stroke-linecap="round">
+        <line x1="64" y1="20" x2="64" y2="30"/><line x1="64" y1="96" x2="64" y2="106"/>
+        <line x1="20" y1="63" x2="30" y2="63"/><line x1="98" y1="63" x2="108" y2="63"/>
+        <line x1="33" y1="32" x2="40" y2="39"/><line x1="88" y1="87" x2="95" y2="94"/>
+        <line x1="95" y1="32" x2="88" y2="39"/><line x1="40" y1="87" x2="33" y2="94"/>
+      </g>
+      <circle cx="64" cy="63" r="24" fill="#FFD438" stroke="#B8620B" stroke-width="3.5"/>
+    
+</svg>

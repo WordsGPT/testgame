@@ -26,7 +26,7 @@ func _ready() -> void:
 
 	for i in range(6):
 		var sp := AudioStreamPlayer.new()
-		sp.volume_db = -16.5
+		sp.volume_db = -7.0
 		add_child(sp)
 		sfx_pool.append(sp)
 
@@ -74,16 +74,16 @@ func play_companion(filename: String, volume_db_offset: float = 3.5) -> void:
 		companion_player.play()
 
 
-func play_sfx(sfx_name: String, pitch_jitter: float = 0.04, vol_db: float = -16.5) -> void:
+func play_sfx(sfx_name: String, pitch_jitter: float = 0.04, vol_db: float = -7.0) -> void:
 	if master_muted:
 		return
 	var st := _get_stream("res://assets/audio/sfx/" + sfx_name + ".ogg")
 	if not st:
 		return
-	# Keep VFX/SFX soft and subtle (-15 dB to -24 dB) so TTS voices are always front and center!
-	var final_db := clampf(vol_db - 13.5, -26.0, -14.5)
+	# Crisp, clearly audible SFX (-6.5 dB to -9.5 dB) that sit cleanly below the +4.5 dB TTS voice!
+	var final_db := clampf(vol_db if vol_db < -1.0 else (vol_db - 7.0), -10.5, -5.5)
 	if is_voice_playing():
-		final_db -= 4.0
+		final_db -= 1.5
 	for sp in sfx_pool:
 		if not sp.playing:
 			sp.stream = st
