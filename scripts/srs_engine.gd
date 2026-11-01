@@ -29,6 +29,7 @@ var recent_history: Array[String] = []
 var modifier_cursor: int = 0
 var scenario_cursor: int = 0
 var direction_cursor: int = 0
+var phrase_cursor: int = 0
 
 
 func _init() -> void:
@@ -77,6 +78,7 @@ func reset_progress() -> void:
 	modifier_cursor = 0
 	scenario_cursor = 0
 	direction_cursor = 0
+	phrase_cursor = 0
 	_init_default_cards()
 	save_progress()
 
@@ -259,30 +261,30 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 	var show_en_text := false
 
 	if tier == 0:
-		mode_tag = "STAGE %d • LEVEL 1: NEW WORD" % sec_num
+		mode_tag = "MAP %d • LEVEL 1: NEW WORD & PHRASE" % sec_num
 		audio_file = "word_%s.ogg" % target_id
 		prompt_fr = "★ %s  =  %s" % [item["fr_def"], item["en"]]
-		sub_en = str(item["tip"])
+		sub_en = "« %s » (%s)" % [item.get("phrase_fr", ""), item.get("phrase_en", "")]
 		show_fr_text = true
 		show_en_text = true
 	elif tier == 1:
-		mode_tag = "STAGE %d • LEVEL 2: READ & SHOOT" % sec_num
-		audio_file = "word_%s.ogg" % target_id
-		prompt_fr = "Shoot:  %s" % item["fr_def"]
-		sub_en = "%s   •   %s" % [item["en"], item["tip"]]
+		mode_tag = "MAP %d • LEVEL 2: EVERYDAY PHRASE" % sec_num
+		audio_file = "phrase_%s.ogg" % target_id
+		prompt_fr = "« %s »" % str(item.get("phrase_fr", item["fr_def"]))
+		sub_en = "%s   •   Shoot: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
 		show_fr_text = true
 		show_en_text = (l1_mode == 1)
 	elif tier == 2:
-		mode_tag = "STAGE %d • LEVEL 3: LISTEN & SHOOT" % sec_num
-		audio_file = ("cmd_%s_f.ogg" % target_id) if use_female else ("cmd_%s_m.ogg" % target_id)
-		prompt_fr = "Shoot:  %s" % item["fr_def"]
-		sub_en = "%s   •   %s" % [item["en"], item["tip"]]
+		mode_tag = "MAP %d • LEVEL 3: LISTEN TO PHRASE" % sec_num
+		audio_file = ("phrase_%s.ogg" % target_id) if use_female else ("word_%s.ogg" % target_id)
+		prompt_fr = "« %s »" % str(item.get("phrase_fr", item["fr_def"]))
+		sub_en = "%s   •   Shoot: %s (%s)" % [str(item.get("phrase_en", "")), item["fr_def"], item["en"]]
 		show_fr_text = false
 		show_en_text = (l1_mode == 1)
 	else:
 		var use_inhibit := ((int(c["correct"]) + global_step) % 2 == 1)
 		if use_inhibit:
-			mode_tag = "STAGE %d • LEVEL 4: DECOY TRAP" % sec_num
+			mode_tag = "MAP %d • LEVEL 4: DECOY TRAP" % sec_num
 			audio_file = "inhibit_%s.ogg" % target_id
 			prompt_fr = item["inhibit"]
 			sub_en = "'Pas...' means NOT that one! Shoot: %s (%s)" % [item["fr_def"], item["en"]]
@@ -290,12 +292,12 @@ func build_prompt_spec(target_id: String) -> Dictionary:
 			var item_idx := VocabData.get_all_ids().find(target_id)
 			speaker_name = "DENISE" if (item_idx % 2 == 0) else "HENRI"
 		else:
-			mode_tag = "STAGE %d • LEVEL 4: FRENCH CLUE" % sec_num
-			audio_file = "desc_%s.ogg" % target_id
-			prompt_fr = item["desc"]
-			sub_en = "%s  →  %s (%s)" % [item["desc_en"], item["fr_def"], item["en"]]
+			mode_tag = "MAP %d • LEVEL 4: SPOKEN PHRASE" % sec_num
+			audio_file = "phrase_%s.ogg" % target_id
+			prompt_fr = "« %s »" % str(item.get("phrase_fr", item["desc"]))
+			sub_en = "%s  →  %s (%s)" % [str(item.get("phrase_en", item["desc_en"])), item["fr_def"], item["en"]]
 			var item_idx := VocabData.get_all_ids().find(target_id)
-			speaker_name = "HENRI" if (item_idx % 2 == 0) else "DENRI"
+			speaker_name = "HENRI" if (item_idx % 2 == 0) else "DENISE"
 		show_fr_text = (tier == 3 and l1_mode != 2)
 		show_en_text = (l1_mode == 1)
 
@@ -500,6 +502,45 @@ func build_direction_prompt_spec(max_level: int = 1, force_index: int = -1) -> D
 	}
 
 
+## Builds an Interactive Day-to-Day Conversational Phrase Exchange Prompt
+func build_daily_phrase_prompt_spec(active_sector: int = -1, force_index: int = -1) -> Dictionary:
+	var p_data: Dictionary
+	if force_index >= 0 and force_index < VocabData.DAILY_PHRASES.size():
+		p_data = VocabData.DAILY_PHRASES[force_index]
+	else:
+		var candidates: Array[Dictionary] = []
+		if active_sector >= 0:
+			for dp in VocabData.DAILY_PHRASES:
+				if int(dp["sector"]) == active_sector:
+					candidates.append(dp)
+		if candidates.is_empty():
+			candidates = VocabData.DAILY_PHRASES
+		p_data = candidates[phrase_cursor % candidates.size()]
+		phrase_cursor += 1
+
+	return {
+		"prompt_type": "DAILY_PHRASE",
+		"phrase_id": p_data["id"],
+		"target_id": p_data["phrase_fr"],
+		"options": p_data["options"].duplicate(),
+		"tier": 1,
+		"speaker": "CHLOÉ",
+		"mode_tag": "EVERYDAY FRENCH PHRASE • REAL-LIFE CONVERSATION",
+		"audio_file": p_data["audio"],
+		"slow_audio_file": "",
+		"prompt_fr": str(p_data["situation_en"]),
+		"situation_en": str(p_data["situation_en"]),
+		"heard_fr": str(p_data["heard_fr"]),
+		"phrase_fr": str(p_data["phrase_fr"]),
+		"phrase_en": str(p_data["phrase_en"]),
+		"sub_en": "« %s »  =  \"%s\"" % [p_data["phrase_fr"], p_data["phrase_en"]],
+		"chloe_tip": str(p_data["chloe_tip"]),
+		"show_fr_text": true,
+		"show_en_text": true,
+		"required_decoy": "",
+	}
+
+
 ## Master Wave Prompt Router: scales smoothly with the player's actual Map & Wave!
 func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dictionary:
 	if sector_filter == -5:
@@ -512,16 +553,18 @@ func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dicti
 	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else clampi(sector_filter, 0, 8)
 	var dir_lvl := clampi(1 + effective_sec + (current_wave - 1), 1, 3)
 
-	# Shot 3 of every round: Physical 3D Directional Movement (1-step in Wave 1 Map 1, scaling to 2-step & 3-step sequences!)
-	if prompt_in_wave == 3:
-		var step3_lvl := 1 if (effective_sec == 0 and current_wave == 1) else mini(2, dir_lvl)
-		return build_direction_prompt_spec(step3_lvl)
+	# Step 4 of every round: Real Day-to-Day Conversational Phrase Exchange for the current Map!
+	if prompt_in_wave == 4:
+		return build_daily_phrase_prompt_spec(effective_sec)
 
-	# Shot 6 (Round Finale): Multi-Step Direction Sequence or 3D Size/Speed/Position Challenge!
-	if prompt_in_wave == 6:
-		if effective_sec >= 1 and (current_wave % 2 == 0):
-			return build_modifier_prompt_spec()
-		return build_direction_prompt_spec(clampi(dir_lvl, 2 if current_wave >= 2 or effective_sec >= 1 else 1, 3))
+	# Step 5 of every round: Physical 3D Directional Movement (1-step in Wave 1 Map 1, scaling to 2-step & 3-step sequences!)
+	if prompt_in_wave == 5:
+		var step5_lvl := 1 if (effective_sec == 0 and current_wave == 1) else clampi(dir_lvl, 2, 3)
+		return build_direction_prompt_spec(step5_lvl)
+
+	# Step 6 (Round Finale): Spoken Phrase Comprehension or 3D Size/Position Challenge!
+	if prompt_in_wave == 6 and effective_sec >= 1 and (current_wave % 2 == 0):
+		return build_modifier_prompt_spec()
 
 	var target_id := select_next_target()
 	return build_prompt_spec(target_id)

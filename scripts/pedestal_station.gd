@@ -90,13 +90,8 @@ func set_vocab(new_id: String) -> void:
 	for ch in _vocab_holder.get_children():
 		ch.queue_free()
 
-	var model_path := "res://assets/models/%s.blend" % vocab_id
-	if ResourceLoader.exists(model_path):
-		var v_res := load(model_path) as PackedScene
-		if v_res:
-			var v_inst := v_res.instantiate() as Node3D
-			v_inst.scale = Vector3.ONE * 1.18
-			_vocab_holder.add_child(v_inst)
+	var v_vis := TargetDrone.create_vocab_visual(vocab_id, 0.86)
+	_vocab_holder.add_child(v_vis)
 
 	var item := VocabData.get_by_id(vocab_id)
 	if not item.is_empty():

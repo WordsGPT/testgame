@@ -35,8 +35,10 @@ var pedestals_root: Node3D
 var projectiles_root: Node3D
 var pickups_root: Node3D
 var map_props_root: Node3D
+var _display_tables_root: Node3D
 var direction_pads_root: Node3D
 var chloe_bot: Node3D
+var _stats_panel: PanelContainer
 var map_banner_lbl: Label3D
 var gallery_sign: Label3D
 var pedestals: Array[PedestalStation] = []
@@ -277,89 +279,71 @@ func _add_park_tree(parent: Node3D, pos: Vector3, scale_f: float, trunk_mat: Mat
 		t_root.add_child(crown)
 
 
+func _add_cyl(parent: Node3D, top_r: float, bot_r: float, h: float, pos: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = top_r
+	cm.bottom_radius = bot_r
+	cm.height = h
+	mi.mesh = cm
+	mi.material_override = mat
+	mi.position = pos
+	parent.add_child(mi)
+
+
+func _add_bistro_table(parent: Node3D, pos: Vector3, top_mat: Material, leg_mat: Material, rim_mat: Material) -> void:
+	var t := Node3D.new()
+	t.position = pos
+	parent.add_child(t)
+	_add_cyl(t, 0.34, 0.42, 0.08, Vector3(0, 0.04, 0), leg_mat)
+	_add_cyl(t, 0.07, 0.09, 1.12, Vector3(0, 0.60, 0), leg_mat)
+	_add_cyl(t, 0.78, 0.76, 0.07, Vector3(0, 1.18, 0), top_mat)
+	_add_cyl(t, 0.80, 0.80, 0.04, Vector3(0, 1.18, 0), rim_mat)
+
+
+func _add_streetlamp(parent: Node3D, pos: Vector3, iron_mat: Material, glow_mat: Material) -> void:
+	var l := Node3D.new()
+	l.position = pos
+	parent.add_child(l)
+	_add_cyl(l, 0.16, 0.24, 0.45, Vector3(0, 0.22, 0), iron_mat)
+	_add_cyl(l, 0.06, 0.09, 3.6, Vector3(0, 2.0, 0), iron_mat)
+	var globe := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.28
+	sm.height = 0.56
+	globe.mesh = sm
+	globe.material_override = glow_mat
+	globe.position = Vector3(0, 3.95, 0)
+	l.add_child(globe)
+
+
 func _build_arena_geometry() -> void:
 	var arena := Node3D.new()
 	arena.name = "HolodeckArena"
 	world_root.add_child(arena)
 
-	var grass_mat := _make_mat(Color(0.32, 0.50, 0.24), 0.90, 0.0)
-	_mat_floor = _make_mat(Color(0.72, 0.56, 0.44), 0.88, 0.0)
-	_mat_tile = _make_mat(Color(0.80, 0.66, 0.54), 0.88, 0.0)
-	_mat_pillar = _make_mat(Color(0.48, 0.28, 0.16), 0.84, 0.0)
-	_mat_wall = _make_mat(Color(0.90, 0.82, 0.70), 0.86, 0.0)
-	_mat_trim = _make_mat(Color(0.80, 0.22, 0.18), 0.82, 0.0)
-	var leaf_mat := _make_mat(Color(0.24, 0.48, 0.22), 0.88, 0.0)
-	var leaf_light := _make_mat(Color(0.32, 0.56, 0.26), 0.88, 0.0)
+	_mat_floor = _make_mat(Color(0.52, 0.48, 0.44), 0.88, 0.0)
+	_mat_tile = _make_mat(Color(0.84, 0.78, 0.68), 0.86, 0.0)
+	_mat_pillar = _make_mat(Color(0.42, 0.26, 0.16), 0.84, 0.0)
+	_mat_wall = _make_mat(Color(0.92, 0.86, 0.76), 0.86, 0.0)
+	_mat_trim = _make_mat(Color(0.78, 0.20, 0.16), 0.82, 0.0)
 
-	# Outer grass park & inner map courtyard floor
-	_add_static_box(arena, Vector3(64.0, 0.5, 64.0), Vector3(0, -0.28, 0), Vector3.ZERO, grass_mat, true)
-	_add_static_box(arena, Vector3(26.0, 0.10, 28.0), Vector3(0, -0.02, -1.0), Vector3.ZERO, _mat_floor, true)
+	# Base physics floor so the player can walk smoothly anywhere
+	_add_static_box(arena, Vector3(64.0, 0.5, 64.0), Vector3(0, -0.26, 0), Vector3.ZERO, _mat_floor, true)
 
-	# Alternating lane strips
-	for lx in [-6.0, -2.0, 2.0, 6.0]:
-		_add_static_box(arena, Vector3(2.8, 0.03, 16.0), Vector3(lx, 0.02, -0.5), Vector3.ZERO, _mat_tile, false)
+	# Invisible perimeter physics bounds so the player never walks off the edge
+	_add_static_box(arena, Vector3(24.0, 4.0, 0.6), Vector3(0, 2.0, 10.5), Vector3.ZERO, _mat_wall, true)
+	for sx in [-10.5, 10.5]:
+		_add_static_box(arena, Vector3(0.6, 4.0, 28.0), Vector3(sx, 2.0, -2.0), Vector3.ZERO, _mat_wall, true)
 
-	# 1. Central stone jump-pad plinth ("EN HAUT" directional jump target!)
-	_add_static_box(arena, Vector3(2.8, 0.42, 2.4), Vector3(0.0, 0.21, 2.2), Vector3.ZERO, _mat_wall, true)
-	_add_static_box(arena, Vector3(3.0, 0.08, 2.6), Vector3(0.0, 0.44, 2.2), Vector3.ZERO, _mat_trim, false)
-
-	# 2. Left & Right Mid-Court Tactical Cover Pillars
-	for side_x in [-4.5, 4.5]:
-		_add_static_box(arena, Vector3(1.35, 1.45, 0.85), Vector3(side_x, 0.72, 2.8), Vector3.ZERO, _mat_wall, true)
-		_add_static_box(arena, Vector3(1.50, 0.14, 0.98), Vector3(side_x, 1.50, 2.8), Vector3.ZERO, _mat_trim, false)
-
-	# 3. Forward Flanking Step Blocks
-	for fwd_x in [-6.8, 6.8]:
-		_add_static_box(arena, Vector3(1.8, 0.55, 1.8), Vector3(fwd_x, 0.27, -0.4), Vector3.ZERO, _mat_pillar, true)
-		_add_static_box(arena, Vector3(1.95, 0.10, 1.95), Vector3(fwd_x, 0.58, -0.4), Vector3.ZERO, _mat_trim, false)
-
-	# Practice Gallery terrace at north end
-	_add_static_box(arena, Vector3(20.0, 0.20, 6.0), Vector3(0, 0.10, -13.5), Vector3.ZERO, _mat_tile, true)
-
-	# Perimeter walls & posts
-	var oct_r := 18.5
-	for i in range(8):
-		var ang_deg := float(i) * 45.0
-		var ang_rad := deg_to_rad(ang_deg)
-		var wx := sin(ang_rad) * oct_r
-		var wz := cos(ang_rad) * oct_r
-		_add_static_box(arena, Vector3(15.8, 2.2, 0.75), Vector3(wx, 1.1, wz), Vector3(0, ang_deg, 0), _mat_wall, true)
-		_add_static_box(arena, Vector3(16.0, 0.24, 0.92), Vector3(wx, 2.30, wz), Vector3(0, ang_deg, 0), _mat_trim, false)
-
-		var c_ang := deg_to_rad(ang_deg + 22.5)
-		var cx := sin(c_ang) * (oct_r - 0.3)
-		var cz := cos(c_ang) * (oct_r - 0.3)
-		_add_static_box(arena, Vector3(0.65, 3.4, 0.65), Vector3(cx, 1.7, cz), Vector3(0, ang_deg + 22.5, 0), _mat_pillar, true)
-		_add_static_box(arena, Vector3(0.85, 0.22, 0.85), Vector3(cx, 3.5, cz), Vector3(0, ang_deg + 22.5, 0), _mat_trim, false)
-
-	# Lush stylized park trees surrounding the courtyard wall
-	var tree_spots := [
-		Vector3(-14.5, 0, -16.5), Vector3(-7.5, 0, -19.5), Vector3(0.0, 0, -20.5),
-		Vector3(7.5, 0, -19.5), Vector3(14.5, 0, -16.5),
-		Vector3(-19.5, 0, -6.0), Vector3(19.5, 0, -6.0),
-		Vector3(-19.0, 0, 4.0), Vector3(19.0, 0, 4.0),
-	]
-	for idx in range(tree_spots.size()):
-		var lmat := leaf_mat if (idx % 2 == 0) else leaf_light
-		var sc := 1.05 + float(idx % 3) * 0.16
-		_add_park_tree(arena, tree_spots[idx], sc, _mat_pillar, lmat)
-
-	# 3D Map Location Banner at the front of the courtyard
-	map_banner_lbl = Label3D.new()
-	map_banner_lbl.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
-	map_banner_lbl.text = "📍 MAP 1: AU CAFÉ PARISIEN  •  Paris Café & Food"
-	map_banner_lbl.position = Vector3(0, 4.35, -8.5)
-	map_banner_lbl.font_size = 44
-	map_banner_lbl.modulate = Color(1.0, 0.94, 0.72)
-	map_banner_lbl.outline_size = 12
-	map_banner_lbl.outline_modulate = Color(0.08, 0.06, 0.04, 0.96)
-	arena.add_child(map_banner_lbl)
+	# Practice Gallery terrace at north end (only visible in Gallery state)
+	_add_static_box(arena, Vector3(20.0, 0.12, 6.0), Vector3(0, 0.06, -13.5), Vector3.ZERO, _mat_tile, true)
 
 	gallery_sign = Label3D.new()
 	gallery_sign.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
-	gallery_sign.text = "PRACTICE GALLERY (MAPS 1–9)  •  SHOOT ANY OBJECT TO HEAR IT"
-	gallery_sign.position = Vector3(0, 4.45, -15.5)
-	gallery_sign.font_size = 38
+	gallery_sign.text = "PRACTICE GALLERY (MAPS 1–9)  •  CLICK ANY OBJECT TO HEAR ITS PHRASE"
+	gallery_sign.position = Vector3(0, 4.25, -15.2)
+	gallery_sign.font_size = 36
 	gallery_sign.modulate = Color(0.99, 0.94, 0.78)
 	gallery_sign.outline_size = 12
 	gallery_sign.outline_modulate = Color(0.18, 0.11, 0.06, 0.95)
@@ -385,66 +369,193 @@ func _apply_map_theme(map_idx: int) -> void:
 	if _sky_mat:
 		_sky_mat.sky_top_color = s_info["sky_top"]
 		_sky_mat.sky_horizon_color = s_info["sky_horizon"]
-	if map_banner_lbl:
-		map_banner_lbl.text = "◈ MAP %d/9: %s  —  %s" % [
-			_active_map_idx + 1,
-			String(s_info["name_fr"]).to_upper(),
-			str(s_info["name_en"])
-		]
 
 	if not map_props_root:
 		return
 	for ch in map_props_root.get_children():
 		ch.queue_free()
 
-	# Spawn Map-Specific 3D Architectural Landmarks so every Map Stage looks distinct!
-	var accent_mat := _make_mat(s_info["trim_col"], 0.75, 0.0)
-	var cream_mat := _make_mat(s_info["wall_col"], 0.82, 0.0)
-	var post_mat := _make_mat(s_info["pillar_col"], 0.80, 0.0)
+	_display_tables_root = Node3D.new()
+	_display_tables_root.name = "DisplayTablesRoot"
+	map_props_root.add_child(_display_tables_root)
 
-	match _active_map_idx:
-		0: # Map 1: Au Café Parisien — Striped Bistro Awnings & Sidewalk Café Tables
-			for sx in [-9.6, 9.6]:
-				_add_static_box(map_props_root, Vector3(2.4, 0.18, 9.0), Vector3(sx, 3.1, 0.0), Vector3(0, 0, -14.0 if sx < 0 else 14.0), accent_mat, false)
-				_add_static_box(map_props_root, Vector3(0.22, 3.0, 0.22), Vector3(sx, 1.5, -3.8), Vector3.ZERO, post_mat, false)
-				_add_static_box(map_props_root, Vector3(0.22, 3.0, 0.22), Vector3(sx, 1.5, 3.8), Vector3.ZERO, post_mat, false)
-		1: # Map 2: La Maison — Warm Apartment Archways & Cozy Rug
-			_add_static_box(map_props_root, Vector3(9.5, 0.04, 6.5), Vector3(0.0, 0.04, 2.2), Vector3.ZERO, accent_mat, false)
-			for sx in [-8.8, 8.8]:
-				_add_static_box(map_props_root, Vector3(0.6, 3.6, 4.2), Vector3(sx, 1.8, 0.5), Vector3.ZERO, cream_mat, false)
-				_add_static_box(map_props_root, Vector3(0.8, 0.35, 4.6), Vector3(sx, 3.7, 0.5), Vector3.ZERO, accent_mat, false)
-		2: # Map 3: Les Sorties — Parisian Boutique Colonnade Canopies
-			for sx in [-9.2, 9.2]:
-				_add_static_box(map_props_root, Vector3(1.8, 0.30, 10.0), Vector3(sx, 3.4, 0.0), Vector3.ZERO, accent_mat, false)
-				for pz in [-4.0, 0.0, 4.0]:
-					_add_static_box(map_props_root, Vector3(0.35, 3.4, 0.35), Vector3(sx, 1.7, pz), Vector3.ZERO, cream_mat, false)
-		3: # Map 4: La Gare du Nord — Overhead Railway Concourse Girders & Yellow Platform Lines
-			for gz in [-4.5, 1.5]:
-				_add_static_box(map_props_root, Vector3(21.0, 0.38, 0.45), Vector3(0.0, 4.8, gz), Vector3.ZERO, post_mat, false)
-				_add_static_box(map_props_root, Vector3(0.45, 4.8, 0.45), Vector3(-10.2, 2.4, gz), Vector3.ZERO, post_mat, false)
-				_add_static_box(map_props_root, Vector3(0.45, 4.8, 0.45), Vector3(10.2, 2.4, gz), Vector3.ZERO, post_mat, false)
-			_add_static_box(map_props_root, Vector3(18.0, 0.04, 0.28), Vector3(0.0, 0.04, -4.8), Vector3.ZERO, accent_mat, false)
-		4: # Map 5: Studio Musique & Tech — Concert Lighting Truss & Glowing Stage Strips
-			_add_static_box(map_props_root, Vector3(18.0, 0.32, 0.32), Vector3(0.0, 4.9, -4.2), Vector3.ZERO, accent_mat, false)
-			for sx in [-8.8, 8.8]:
-				_add_static_box(map_props_root, Vector3(0.38, 4.9, 0.38), Vector3(sx, 2.45, -4.2), Vector3.ZERO, post_mat, false)
-		5: # Map 6: En Centre-Ville — Haussmann Street Pillars & Green Pharmacy Cross
-			var pharm_green := _make_mat(Color(0.15, 0.88, 0.45), 0.4, 0.0, true)
-			_add_static_box(map_props_root, Vector3(1.1, 0.32, 0.18), Vector3(-8.8, 3.5, -2.5), Vector3.ZERO, pharm_green, false)
-			_add_static_box(map_props_root, Vector3(0.32, 1.1, 0.18), Vector3(-8.8, 3.5, -2.5), Vector3.ZERO, pharm_green, false)
-		6: # Map 7: Jardin du Luxembourg — Extra Blooming Garden Planters & Park Trees
-			var leaf_m := _make_mat(Color(0.26, 0.54, 0.24), 0.85, 0.0)
-			for tx in [-10.0, 10.0]:
-				_add_park_tree(map_props_root, Vector3(tx, 0.0, -2.5), 0.92, post_mat, leaf_m)
-				_add_park_tree(map_props_root, Vector3(tx, 0.0, 3.2), 0.88, post_mat, leaf_m)
-		7: # Map 8: L'Observatoire — Solar Gold Observatory Archways
-			for sx in [-9.2, 9.2]:
-				_add_static_box(map_props_root, Vector3(0.5, 4.2, 0.5), Vector3(sx, 2.1, -1.5), Vector3.ZERO, accent_mat, false)
-			_add_static_box(map_props_root, Vector3(18.8, 0.28, 0.4), Vector3(0.0, 4.2, -1.5), Vector3.ZERO, accent_mat, false)
-		8: # Map 9: Le Château Médiéval — Castle Battlement Merlons & Royal Banners
-			for bx in [-9.0, -6.0, -3.0, 3.0, 6.0, 9.0]:
-				_add_static_box(map_props_root, Vector3(1.2, 0.85, 0.85), Vector3(bx, 2.7, -8.8), Vector3.ZERO, cream_mat, false)
-				_add_static_box(map_props_root, Vector3(0.55, 1.8, 0.12), Vector3(bx, 1.8, -8.3), Vector3.ZERO, accent_mat, false)
+	var iron_mat := _make_mat(Color(0.14, 0.16, 0.19), 0.65, 0.35)
+	var brass_mat := _make_mat(Color(0.86, 0.68, 0.26), 0.45, 0.35)
+	var warm_glow := _make_mat(Color(1.0, 0.88, 0.56), 0.2, 0.0, true)
+	var glass_blue := _make_mat(Color(0.56, 0.78, 0.94), 0.25, 0.1)
+	var wood_dark := _make_mat(Color(0.36, 0.22, 0.13), 0.78)
+	var wood_warm := _make_mat(Color(0.62, 0.40, 0.22), 0.78)
+	var marble_top := _make_mat(Color(0.95, 0.92, 0.86), 0.55)
+
+	# Build a completely distinct, recognizable 3D place for each map stage!
+	if _active_map_idx in [0, 8]:
+		# === LOCATION: AU CAFÉ PARISIEN (Haussmann Facade, Striped Café Awning, Bistro Terrace) ===
+		var cobble_mat := _make_mat(Color(0.46, 0.43, 0.40), 0.90)
+		var terrace_mat := _make_mat(Color(0.84, 0.77, 0.66), 0.85)
+		var stone_facade := _make_mat(Color(0.93, 0.87, 0.76), 0.84)
+		var burgundy_mat := _make_mat(Color(0.50, 0.13, 0.15), 0.75)
+		var red_stripe := _make_mat(Color(0.80, 0.18, 0.16), 0.78)
+		var cream_stripe := _make_mat(Color(0.97, 0.94, 0.86), 0.78)
+
+		_add_static_box(map_props_root, Vector3(24.0, 0.04, 18.0), Vector3(0, 0.01, 1.0), Vector3.ZERO, cobble_mat, false)
+		_add_static_box(map_props_root, Vector3(17.5, 0.10, 6.2), Vector3(0, 0.05, -2.5), Vector3.ZERO, terrace_mat, false)
+
+		# Haussmann building facade at z = -5.8
+		_add_static_box(map_props_root, Vector3(22.0, 8.8, 0.7), Vector3(0, 4.4, -5.8), Vector3.ZERO, stone_facade, true)
+		_add_static_box(map_props_root, Vector3(22.2, 3.8, 0.78), Vector3(0, 1.9, -5.75), Vector3.ZERO, burgundy_mat, false)
+		_add_static_box(map_props_root, Vector3(22.4, 0.26, 0.92), Vector3(0, 3.9, -5.65), Vector3.ZERO, brass_mat, false)
+
+		# 3 Warm Illuminated Café Windows on the ground floor + 3 Upper Apartment Windows with Balconies
+		for wx in [-5.2, 0.0, 5.2]:
+			_add_static_box(map_props_root, Vector3(2.8, 2.3, 0.84), Vector3(wx, 2.1, -5.72), Vector3.ZERO, wood_dark, false)
+			_add_static_box(map_props_root, Vector3(2.5, 2.0, 0.88), Vector3(wx, 2.1, -5.70), Vector3.ZERO, warm_glow, false)
+			# Upper floor window + wrought-iron balcony
+			_add_static_box(map_props_root, Vector3(2.2, 2.4, 0.80), Vector3(wx, 6.0, -5.72), Vector3.ZERO, wood_dark, false)
+			_add_static_box(map_props_root, Vector3(1.9, 2.1, 0.84), Vector3(wx, 6.0, -5.70), Vector3.ZERO, glass_blue, false)
+			_add_static_box(map_props_root, Vector3(2.6, 0.75, 0.45), Vector3(wx, 5.05, -5.35), Vector3.ZERO, iron_mat, false)
+
+		# Iconic Sloped Red-and-Cream Striped Parisian Café Awning
+		for s_i in range(11):
+			var sx := -7.5 + float(s_i) * 1.5
+			var smat := red_stripe if (s_i % 2 == 0) else cream_stripe
+			_add_static_box(map_props_root, Vector3(1.48, 0.14, 2.9), Vector3(sx, 3.55, -4.3), Vector3(18.0, 0, 0), smat, false)
+
+		# Parisian Streetlamps & Side Planters
+		for lx in [-7.2, 7.2]:
+			_add_streetlamp(map_props_root, Vector3(lx, 0.0, -1.8), iron_mat, warm_glow)
+
+		# 3 Round Parisian Bistro Tables where the 3 café items sit!
+		for tx in [-4.2, 0.0, 4.2]:
+			_add_bistro_table(_display_tables_root, Vector3(tx, 0.0, -0.6), marble_top, iron_mat, brass_mat)
+
+	elif _active_map_idx == 1:
+		# === LOCATION: LA MAISON (Cozy Wood-Floored Parisian Apartment Interior) ===
+		var parquet_mat := _make_mat(Color(0.66, 0.45, 0.28), 0.78)
+		var rug_mat := _make_mat(Color(0.72, 0.28, 0.22), 0.88)
+		var rug_border := _make_mat(Color(0.92, 0.84, 0.68), 0.86)
+		var apt_wall := _make_mat(Color(0.95, 0.90, 0.82), 0.85)
+		var marble_fp := _make_mat(Color(0.94, 0.92, 0.88), 0.60)
+
+		_add_static_box(map_props_root, Vector3(20.0, 0.05, 16.0), Vector3(0, 0.02, 1.0), Vector3.ZERO, parquet_mat, false)
+		_add_static_box(map_props_root, Vector3(9.6, 0.06, 5.6), Vector3(0, 0.03, 1.8), Vector3.ZERO, rug_border, false)
+		_add_static_box(map_props_root, Vector3(8.8, 0.07, 4.8), Vector3(0, 0.035, 1.8), Vector3.ZERO, rug_mat, false)
+
+		# Back & Side Apartment Walls + Wainscoting
+		_add_static_box(map_props_root, Vector3(19.6, 7.2, 0.6), Vector3(0, 3.6, -5.6), Vector3.ZERO, apt_wall, true)
+		_add_static_box(map_props_root, Vector3(19.6, 1.3, 0.68), Vector3(0, 0.65, -5.56), Vector3.ZERO, wood_dark, false)
+		for swx in [-9.4, 9.4]:
+			_add_static_box(map_props_root, Vector3(0.6, 7.2, 16.0), Vector3(swx, 3.6, 1.5), Vector3.ZERO, apt_wall, false)
+			_add_static_box(map_props_root, Vector3(0.68, 1.3, 16.0), Vector3(swx, 0.65, 1.5), Vector3.ZERO, wood_dark, false)
+
+		# Center Marble Fireplace Mantel & Framed Painting above it
+		_add_static_box(map_props_root, Vector3(2.8, 2.2, 0.85), Vector3(0, 1.1, -5.2), Vector3.ZERO, marble_fp, false)
+		_add_static_box(map_props_root, Vector3(1.6, 1.4, 0.90), Vector3(0, 0.7, -5.18), Vector3.ZERO, warm_glow, false)
+		_add_static_box(map_props_root, Vector3(2.4, 1.5, 0.14), Vector3(0, 4.1, -5.25), Vector3.ZERO, brass_mat, false)
+		_add_static_box(map_props_root, Vector3(2.1, 1.2, 0.18), Vector3(0, 4.1, -5.23), Vector3.ZERO, glass_blue, false)
+
+		# Tall French Windows on Left & Right + Wooden Bookshelves
+		for wx in [-4.5, 4.5]:
+			_add_static_box(map_props_root, Vector3(2.4, 3.4, 0.70), Vector3(wx, 3.1, -5.50), Vector3.ZERO, marble_fp, false)
+			_add_static_box(map_props_root, Vector3(2.0, 3.0, 0.74), Vector3(wx, 3.1, -5.48), Vector3.ZERO, glass_blue, false)
+		for bx in [-7.6, 7.6]:
+			_add_static_box(map_props_root, Vector3(1.8, 3.8, 0.75), Vector3(bx, 1.9, -5.1), Vector3.ZERO, wood_dark, false)
+
+		# 3 Warm Walnut Apartment Side Tables for the 3 targets
+		for tx in [-4.2, 0.0, 4.2]:
+			_add_bistro_table(_display_tables_root, Vector3(tx, 0.0, -0.6), wood_warm, wood_dark, brass_mat)
+
+	elif _active_map_idx in [2, 5]:
+		# === LOCATION: LE MARCHÉ & CENTRE-VILLE (Parisian Boutiques, Pharmacy Cross & Market Stalls) ===
+		var square_mat := _make_mat(Color(0.54, 0.52, 0.49), 0.88)
+		var shop_wall := _make_mat(Color(0.92, 0.88, 0.80), 0.85)
+		var navy_shop := _make_mat(Color(0.16, 0.28, 0.48), 0.75)
+		var green_shop := _make_mat(Color(0.16, 0.48, 0.34), 0.75)
+		var ochre_shop := _make_mat(Color(0.76, 0.48, 0.18), 0.75)
+		var neon_green := _make_mat(Color(0.20, 0.95, 0.48), 0.2, 0.0, true)
+
+		_add_static_box(map_props_root, Vector3(24.0, 0.05, 18.0), Vector3(0, 0.02, 1.0), Vector3.ZERO, square_mat, false)
+		_add_static_box(map_props_root, Vector3(22.0, 8.2, 0.7), Vector3(0, 4.1, -5.8), Vector3.ZERO, shop_wall, true)
+
+		# 3 Distinct Storefronts: Left Boutique, Center Pharmacie, Right Boulangerie
+		_add_static_box(map_props_root, Vector3(6.6, 3.8, 0.82), Vector3(-6.8, 1.9, -5.72), Vector3.ZERO, navy_shop, false)
+		_add_static_box(map_props_root, Vector3(6.6, 3.8, 0.82), Vector3(0.0, 1.9, -5.72), Vector3.ZERO, green_shop, false)
+		_add_static_box(map_props_root, Vector3(6.6, 3.8, 0.82), Vector3(6.8, 1.9, -5.72), Vector3.ZERO, ochre_shop, false)
+
+		for sx in [-6.8, 0.0, 6.8]:
+			_add_static_box(map_props_root, Vector3(4.6, 2.2, 0.88), Vector3(sx, 1.8, -5.68), Vector3.ZERO, warm_glow, false)
+			_add_static_box(map_props_root, Vector3(5.8, 0.18, 2.2), Vector3(sx, 3.45, -4.6), Vector3(14.0, 0, 0), brass_mat, false)
+
+		# Glowing Green French Pharmacy Cross on the building
+		_add_static_box(map_props_root, Vector3(1.1, 0.34, 0.20), Vector3(0.0, 4.55, -5.35), Vector3.ZERO, neon_green, false)
+		_add_static_box(map_props_root, Vector3(0.34, 1.1, 0.20), Vector3(0.0, 4.55, -5.35), Vector3.ZERO, neon_green, false)
+
+		for tx in [-4.2, 0.0, 4.2]:
+			_add_bistro_table(_display_tables_root, Vector3(tx, 0.0, -0.6), wood_warm, iron_mat, brass_mat)
+
+	elif _active_map_idx in [3, 7]:
+		# === LOCATION: LA GARE DU NORD (Slate Platform, Yellow Safety Line, Steel Hall & TGV Train!) ===
+		var platform_mat := _make_mat(Color(0.32, 0.35, 0.40), 0.82)
+		var safety_yellow := _make_mat(Color(0.96, 0.78, 0.14), 0.65)
+		var steel_mat := _make_mat(Color(0.22, 0.28, 0.36), 0.55, 0.40)
+		var tgv_silver := _make_mat(Color(0.84, 0.87, 0.92), 0.40, 0.35)
+		var tgv_blue := _make_mat(Color(0.14, 0.36, 0.76), 0.45, 0.25)
+		var tgv_win := _make_mat(Color(0.12, 0.16, 0.22), 0.25, 0.50)
+
+		_add_static_box(map_props_root, Vector3(24.0, 0.06, 18.0), Vector3(0, 0.03, 1.0), Vector3.ZERO, platform_mat, false)
+		_add_static_box(map_props_root, Vector3(20.0, 0.08, 0.32), Vector3(0, 0.04, -2.8), Vector3.ZERO, safety_yellow, false)
+
+		# Steel Station Hall Columns & Overhead Concourse Trusses
+		for gz in [-4.8, 0.5]:
+			_add_static_box(map_props_root, Vector3(20.4, 0.42, 0.48), Vector3(0, 5.2, gz), Vector3.ZERO, steel_mat, false)
+			for cx in [-8.6, 8.6]:
+				_add_static_box(map_props_root, Vector3(0.48, 5.2, 0.48), Vector3(cx, 2.6, gz), Vector3.ZERO, steel_mat, false)
+
+		# High-Speed TGV Train parked on the railway tracks at z = -4.9!
+		_add_static_box(map_props_root, Vector3(21.0, 3.1, 2.2), Vector3(0, 1.75, -5.1), Vector3.ZERO, tgv_silver, true)
+		_add_static_box(map_props_root, Vector3(21.1, 0.55, 2.26), Vector3(0, 1.55, -5.08), Vector3.ZERO, tgv_blue, false)
+		for wx in [-7.2, -3.6, 0.0, 3.6, 7.2]:
+			_add_static_box(map_props_root, Vector3(2.4, 0.78, 2.30), Vector3(wx, 2.25, -5.06), Vector3.ZERO, tgv_win, false)
+
+		# Station Departure Board high above
+		_add_static_box(map_props_root, Vector3(8.4, 0.95, 0.22), Vector3(0, 4.45, -3.8), Vector3.ZERO, tgv_blue, false)
+		var dep_lbl := Label3D.new()
+		dep_lbl.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
+		dep_lbl.text = "GARE DU NORD  •  QUAI 1  •  TGV PARIS – LYON"
+		dep_lbl.position = Vector3(0, 4.45, -3.65)
+		dep_lbl.font_size = 34
+		dep_lbl.modulate = Color(1.0, 0.92, 0.36)
+		dep_lbl.outline_size = 8
+		map_props_root.add_child(dep_lbl)
+
+		for tx in [-4.2, 0.0, 4.2]:
+			_add_bistro_table(_display_tables_root, Vector3(tx, 0.0, -0.6), tgv_silver, steel_mat, safety_yellow)
+
+	else:
+		# === LOCATION: LE JARDIN DU LUXEMBOURG (Lush Park Lawn, Gravel Path, Fountain & Trees) ===
+		var grass_m := _make_mat(Color(0.30, 0.54, 0.24), 0.90)
+		var gravel_m := _make_mat(Color(0.86, 0.78, 0.64), 0.88)
+		var stone_m := _make_mat(Color(0.90, 0.87, 0.80), 0.84)
+		var water_m := _make_mat(Color(0.24, 0.74, 0.90), 0.25, 0.1, true)
+		var leaf_dark := _make_mat(Color(0.24, 0.48, 0.22), 0.88)
+		var leaf_bright := _make_mat(Color(0.32, 0.58, 0.26), 0.88)
+
+		_add_static_box(map_props_root, Vector3(26.0, 0.04, 20.0), Vector3(0, 0.01, 1.0), Vector3.ZERO, grass_m, false)
+		_add_static_box(map_props_root, Vector3(13.5, 0.06, 16.0), Vector3(0, 0.03, 1.0), Vector3.ZERO, gravel_m, false)
+
+		# Stone Balustrade & Central Park Fountain Basin
+		_add_static_box(map_props_root, Vector3(20.0, 1.15, 0.55), Vector3(0, 0.58, -5.8), Vector3.ZERO, stone_m, true)
+		_add_cyl(map_props_root, 2.2, 2.3, 0.48, Vector3(0, 0.24, -3.6), stone_m)
+		_add_cyl(map_props_root, 1.9, 1.9, 0.52, Vector3(0, 0.26, -3.6), water_m)
+
+		# Perimeter Park Trees (placed out to the sides/back so center sightlines stay clear)
+		for t_pos in [
+			Vector3(-8.2, 0, -6.8), Vector3(-4.2, 0, -7.4), Vector3(4.2, 0, -7.4), Vector3(8.2, 0, -6.8),
+			Vector3(-8.8, 0, -1.5), Vector3(8.8, 0, -1.5),
+		]:
+			_add_park_tree(map_props_root, t_pos, 1.05, wood_dark, leaf_dark if t_pos.x < 0 else leaf_bright)
+
+		for tx in [-4.2, 0.0, 4.2]:
+			_add_bistro_table(_display_tables_root, Vector3(tx, 0.0, -0.6), stone_m, stone_m, brass_mat)
 
 
 func _build_direction_pads() -> void:
@@ -459,28 +570,38 @@ func _build_direction_pads() -> void:
 		pad_root.position = pos
 		direction_pads_root.add_child(pad_root)
 
+		var disc := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.82
+		cm.bottom_radius = 0.86
+		cm.height = 0.05
+		disc.mesh = cm
+		disc.material_override = _make_mat(Color(0.14, 0.20, 0.28), 0.75)
+		pad_root.add_child(disc)
+
 		var ring := MeshInstance3D.new()
 		var tm := TorusMesh.new()
-		tm.inner_radius = 0.88
-		tm.outer_radius = 1.08
+		tm.inner_radius = 0.78
+		tm.outer_radius = 0.94
 		var rmat := StandardMaterial3D.new()
 		rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		rmat.albedo_color = Color(0.38, 0.82, 1.0, 0.85)
+		rmat.albedo_color = Color(0.38, 0.82, 1.0, 0.88)
 		tm.material = rmat
 		ring.mesh = tm
+		ring.position = Vector3(0, 0.03, 0)
 		pad_root.add_child(ring)
 
 		var lbl := Label3D.new()
 		lbl.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
 		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		lbl.no_depth_test = true
-		lbl.pixel_size = 0.0038
-		lbl.font_size = 36
+		lbl.pixel_size = 0.0036
+		lbl.font_size = 32
 		lbl.outline_size = 10
 		lbl.modulate = Color(1.0, 0.96, 0.82)
 		lbl.outline_modulate = Color(0.05, 0.06, 0.09, 0.96)
 		lbl.text = str(info["badge"])
-		lbl.position = Vector3(0.0, 1.48, 0.0)
+		lbl.position = Vector3(0.0, 0.68, 0.0)
 		pad_root.add_child(lbl)
 
 		_dir_pad_nodes[dir_key] = {
@@ -491,40 +612,90 @@ func _build_direction_pads() -> void:
 
 
 func _spawn_chloe_bot() -> void:
+	# Build Chloé as a charming 3D French Guide Character wearing a crimson beret & scarf!
+	# Positioned warmly on the left of the terrace (x = -5.1, z = 1.4), completely out of target sightlines.
 	chloe_bot = Node3D.new()
-	chloe_bot.position = Vector3(-2.3, 1.50, 2.4)
+	chloe_bot.position = Vector3(-5.1, 0.0, 1.4)
+	chloe_bot.rotation_degrees = Vector3(0, 32.0, 0)
 	world_root.add_child(chloe_bot)
 
-	var drone_res := load("res://assets/models/drone.blend") as PackedScene
-	if drone_res:
-		var d_inst := drone_res.instantiate() as Node3D
-		d_inst.scale = Vector3.ONE * 0.42
-		chloe_bot.add_child(d_inst)
+	var coat_mat := _make_mat(Color(0.16, 0.24, 0.42), 0.78)
+	var red_mat := _make_mat(Color(0.82, 0.16, 0.18), 0.72)
+	var skin_mat := _make_mat(Color(0.96, 0.80, 0.68), 0.75)
+	var hair_mat := _make_mat(Color(0.24, 0.15, 0.10), 0.82)
+	var dark_mat := _make_mat(Color(0.08, 0.08, 0.10), 0.50)
 
-	var heart_res := load("res://assets/models/coeur.blend") as PackedScene
-	if heart_res:
-		var h_inst := heart_res.instantiate() as Node3D
-		h_inst.position = Vector3(0.0, 0.28, 0.0)
-		h_inst.scale = Vector3.ONE * 0.30
-		chloe_bot.add_child(h_inst)
+	# Coat torso & base
+	_add_cyl(chloe_bot, 0.22, 0.32, 1.15, Vector3(0, 0.58, 0), coat_mat)
+	# Red Parisian silk scarf
+	var scarf := MeshInstance3D.new()
+	var st := TorusMesh.new()
+	st.inner_radius = 0.14
+	st.outer_radius = 0.24
+	scarf.mesh = st
+	scarf.position = Vector3(0, 1.16, 0)
+	scarf.material_override = red_mat
+	chloe_bot.add_child(scarf)
+
+	# Head & Hair
+	var head := MeshInstance3D.new()
+	var h_sph := SphereMesh.new()
+	h_sph.radius = 0.23
+	h_sph.height = 0.46
+	head.mesh = h_sph
+	head.position = Vector3(0, 1.42, 0)
+	head.material_override = skin_mat
+	chloe_bot.add_child(head)
+
+	var hair := MeshInstance3D.new()
+	var hr_sph := SphereMesh.new()
+	hr_sph.radius = 0.24
+	hr_sph.height = 0.42
+	hair.mesh = hr_sph
+	hair.position = Vector3(0, 1.45, -0.05)
+	hair.material_override = hair_mat
+	chloe_bot.add_child(hair)
+
+	# Expressive Eyes
+	for ex in [-0.08, 0.08]:
+		var eye := MeshInstance3D.new()
+		var e_sph := SphereMesh.new()
+		e_sph.radius = 0.032
+		e_sph.height = 0.064
+		eye.mesh = e_sph
+		eye.position = Vector3(ex, 1.44, 0.20)
+		eye.material_override = dark_mat
+		chloe_bot.add_child(eye)
+
+	# Classic tilted crimson French Beret (le béret)
+	var beret := MeshInstance3D.new()
+	var b_cyl := CylinderMesh.new()
+	b_cyl.top_radius = 0.26
+	b_cyl.bottom_radius = 0.22
+	b_cyl.height = 0.09
+	beret.mesh = b_cyl
+	beret.position = Vector3(-0.03, 1.63, 0.0)
+	beret.rotation_degrees = Vector3(6.0, 0.0, 14.0)
+	beret.material_override = red_mat
+	chloe_bot.add_child(beret)
 
 	var nametag := Label3D.new()
 	nametag.font = load("res://assets/fonts/DejaVuSans.ttf") as Font
 	nametag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	nametag.no_depth_test = true
-	nametag.pixel_size = 0.0030
-	nametag.font_size = 30
+	nametag.pixel_size = 0.0032
+	nametag.font_size = 28
 	nametag.outline_size = 8
-	nametag.modulate = Color(1.0, 0.88, 0.42)
+	nametag.modulate = Color(1.0, 0.90, 0.48)
 	nametag.outline_modulate = Color(0.06, 0.05, 0.08, 0.95)
-	nametag.text = "★ Chloé (Guide)"
-	nametag.position = Vector3(0.0, 0.64, 0.0)
+	nametag.text = "★ Chloé"
+	nametag.position = Vector3(0.0, 1.92, 0.0)
 	chloe_bot.add_child(nametag)
 
 
 func _chloe_say(msg: String, voice_file: String = "") -> void:
 	if companion_lbl:
-		companion_lbl.text = "★ Chloé:  " + msg
+		companion_lbl.text = "★ Chloé :  " + msg
 	if companion_panel:
 		companion_panel.visible = (msg != "")
 	if voice_file != "" and audio:
@@ -546,19 +717,19 @@ func _spawn_gallery_pedestals() -> void:
 		ch.queue_free()
 
 	var sec_ids := VocabData.get_sector_ids(0)
-	var xs := [-7.2, -3.6, 0.0, 3.6, 7.2]
+	var xs := [-4.8, -2.4, 0.0, 2.4, 4.8]
 	for i in range(5):
 		var ped := PedestalStation.new()
 		pedestals_root.add_child(ped)
-		var pos := Vector3(xs[i], 0.20, -13.2)
-		ped.setup(sec_ids[i], pos, Vector3(0, 0.2, 6.0))
+		var pos := Vector3(xs[i], 0.16, -0.6)
+		ped.setup(sec_ids[i], pos, Vector3(0, 0.2, 6.6))
 		pedestals.append(ped)
 
 
 func _set_gallery_visible(enabled: bool) -> void:
 	pedestals_root.visible = enabled
 	if gallery_sign:
-		gallery_sign.visible = enabled
+		gallery_sign.visible = false
 	for ped in pedestals:
 		if is_instance_valid(ped):
 			ped.set_active_station(enabled)
@@ -712,19 +883,19 @@ func _build_ui() -> void:
 	feedback_banner.add_child(feedback_lbl)
 
 	# 4. Borderless Floating Top-Left Status (Zero background box!)
-	var stats_panel := PanelContainer.new()
-	stats_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	stats_panel.position = Vector2(20, 14)
-	stats_panel.custom_minimum_size = Vector2(220, 84)
-	stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(stats_panel)
+	_stats_panel = PanelContainer.new()
+	_stats_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	_stats_panel.position = Vector2(20, 14)
+	_stats_panel.custom_minimum_size = Vector2(220, 84)
+	_stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(_stats_panel)
 
 	var sv := VBoxContainer.new()
 	sv.add_theme_constant_override("separation", 4)
-	stats_panel.add_child(sv)
+	_stats_panel.add_child(sv)
 
 	wave_lbl = Label.new()
-	wave_lbl.text = "WAVE 1  •  1/6"
+	wave_lbl.text = "MAP 1  •  STEP 1/6"
 	wave_lbl.add_theme_font_size_override("font_size", 14)
 	wave_lbl.add_theme_color_override("font_color", Color(0.96, 0.96, 0.98))
 	wave_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.92))
@@ -740,38 +911,27 @@ func _build_ui() -> void:
 	sv.add_child(score_lbl)
 
 	shield_bar = ProgressBar.new()
-	shield_bar.show_percentage = false
-	shield_bar.max_value = 100.0
-	shield_bar.value = 100.0
-	shield_bar.custom_minimum_size = Vector2(168, 8)
-	var sb_bg := StyleBoxFlat.new()
-	sb_bg.bg_color = Color(0.05, 0.07, 0.10, 0.55)
-	sb_bg.set_corner_radius_all(4)
-	shield_bar.add_theme_stylebox_override("background", sb_bg)
-	var sb_fill := StyleBoxFlat.new()
-	sb_fill.bg_color = Color(0.28, 0.94, 0.52)
-	sb_fill.set_corner_radius_all(4)
-	shield_bar.add_theme_stylebox_override("fill", sb_fill)
+	shield_bar.visible = false
 	sv.add_child(shield_bar)
 
 	# 5. Friendly Companion Chat Pill ("Chloé" — bottom-left translucent glass pill)
 	companion_panel = PanelContainer.new()
-	var comp_style := _make_panel_style(Color(0.06, 0.08, 0.12, 0.74), Color(1.0, 0.84, 0.36, 0.55), 20, 1)
+	var comp_style := _make_panel_style(Color(0.06, 0.08, 0.12, 0.82), Color(1.0, 0.84, 0.36, 0.65), 18, 1)
 	comp_style.content_margin_left = 16
 	comp_style.content_margin_right = 16
-	comp_style.content_margin_top = 7
-	comp_style.content_margin_bottom = 7
+	comp_style.content_margin_top = 8
+	comp_style.content_margin_bottom = 8
 	companion_panel.add_theme_stylebox_override("panel", comp_style)
-	companion_panel.position = Vector2(20, 626)
-	companion_panel.custom_minimum_size = Vector2(580, 38)
+	companion_panel.position = Vector2(20, 618)
+	companion_panel.custom_minimum_size = Vector2(640, 44)
 	companion_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(companion_panel)
 
 	companion_lbl = Label.new()
-	companion_lbl.text = "★ Chloé: Salut ! Walk into the golden portal or shoot it to start!"
+	companion_lbl.text = "★ Chloé : « Bonjour ! Bienvenue au café parisien. Commençons ensemble ! »"
 	companion_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	companion_lbl.add_theme_font_size_override("font_size", 13)
-	companion_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.82))
+	companion_lbl.add_theme_color_override("font_color", Color(1.0, 0.96, 0.84))
 	companion_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
 	companion_lbl.add_theme_constant_override("outline_size", 4)
 	companion_panel.add_child(companion_lbl)
@@ -780,16 +940,16 @@ func _build_ui() -> void:
 	var bot_panel := PanelContainer.new()
 	bot_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	bot_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bot_panel.position = Vector2(-460, -30)
-	bot_panel.custom_minimum_size = Vector2(920, 26)
+	bot_panel.position = Vector2(-460, -28)
+	bot_panel.custom_minimum_size = Vector2(920, 24)
 	bot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(bot_panel)
 
 	hotkeys_lbl = Label.new()
-	hotkeys_lbl.text = "[WASD] Move & Step on Pads   •   [Shift] Dash   •   [Space] Jump   •   [Click] Shoot   •   [E] Replay   •   [Tab] Word Book"
+	hotkeys_lbl.text = "[Click / 1–3] Choose Target   •   [WASD] Move   •   [E] Replay Audio   •   [H] Hint   •   [Tab] Word & Phrase Book"
 	hotkeys_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hotkeys_lbl.add_theme_font_size_override("font_size", 13)
-	hotkeys_lbl.add_theme_color_override("font_color", Color(0.98, 0.98, 0.98, 0.88))
+	hotkeys_lbl.add_theme_color_override("font_color", Color(0.98, 0.98, 0.98, 0.90))
 	hotkeys_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.92))
 	hotkeys_lbl.add_theme_constant_override("outline_size", 5)
 	bot_panel.add_child(hotkeys_lbl)
@@ -800,40 +960,61 @@ func _build_ui() -> void:
 
 
 func _build_menu_overlay() -> void:
-	# Playable 3D Hub Header — no giant center box blocking the 3D portals!
+	# Clean Parisian Title Card & Action Buttons
 	menu_panel = PanelContainer.new()
-	menu_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	menu_panel.add_theme_stylebox_override(
+		"panel",
+		_make_panel_style(Color(0.07, 0.09, 0.14, 0.82), Color(1.0, 0.84, 0.36, 0.65), 18, 1)
+	)
 	menu_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	menu_panel.position = Vector2(-340, 12)
-	menu_panel.custom_minimum_size = Vector2(680, 96)
-	menu_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu_panel.position = Vector2(-360, 14)
+	menu_panel.custom_minimum_size = Vector2(720, 118)
 	ui_layer.add_child(menu_panel)
 
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 4)
-	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_theme_constant_override("separation", 6)
 	menu_panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "FRANC-TIREUR"
+	title.text = "FRANC-TIREUR  •  BONJOUR PARIS !"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.36))
 	title.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
-	title.add_theme_constant_override("outline_size", 8)
+	title.add_theme_constant_override("outline_size", 6)
 	vb.add_child(title)
 
 	menu_stats_lbl = Label.new()
 	menu_stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	menu_stats_lbl.add_theme_font_size_override("font_size", 15)
-	menu_stats_lbl.add_theme_color_override("font_color", Color(0.98, 0.98, 0.98))
-	menu_stats_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
-	menu_stats_lbl.add_theme_constant_override("outline_size", 6)
+	menu_stats_lbl.add_theme_font_size_override("font_size", 14)
+	menu_stats_lbl.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90))
 	vb.add_child(menu_stats_lbl)
 
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 10)
+	vb.add_child(btn_row)
+
+	var start_b := Button.new()
+	start_b.text = "▶ Commencer / Start [Space]"
+	start_b.custom_minimum_size = Vector2(220, 34)
+	start_b.add_theme_font_size_override("font_size", 14)
+	start_b.pressed.connect(_on_start_mission_pressed)
+	btn_row.add_child(start_b)
+
 	sector_btn = Button.new()
-	sector_btn.visible = false
-	vb.add_child(sector_btn)
+	sector_btn.text = "↻ Change Place (Map 1/9)"
+	sector_btn.custom_minimum_size = Vector2(195, 34)
+	sector_btn.add_theme_font_size_override("font_size", 13)
+	sector_btn.pressed.connect(_on_cycle_sector)
+	btn_row.add_child(sector_btn)
+
+	var book_b := Button.new()
+	book_b.text = "♪ Word & Phrase Book [Tab]"
+	book_b.custom_minimum_size = Vector2(195, 34)
+	book_b.add_theme_font_size_override("font_size", 13)
+	book_b.pressed.connect(func(): _toggle_lexicon(true))
+	btn_row.add_child(book_b)
 
 	l1_btn = Button.new()
 	l1_btn.visible = false
@@ -885,14 +1066,15 @@ func _build_lexicon_overlay() -> void:
 	vb.add_child(top)
 
 	lexicon_header_lbl = Label.new()
-	lexicon_header_lbl.text = "FRENCH WORD BOOK (45 Words) — Click [♪] to hear native pronunciation"
+	lexicon_header_lbl.text = "FRENCH WORD & PHRASE BOOK — Click [♪] to hear native words & everyday phrases"
 	lexicon_header_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lexicon_header_lbl.add_theme_font_size_override("font_size", 15)
 	lexicon_header_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.38))
 	top.add_child(lexicon_header_lbl)
 
 	for tab_spec in [
-		["ALL", "All (45)"],
+		["ALL", "All Words (45)"],
+		["PHRASES", "★ Phrases (18)"],
 		["A1", "Maps 1–4 (20)"],
 		["A2", "Maps 5–7 (15)"],
 		["B1", "Maps 8–9 (10)"],
@@ -900,7 +1082,7 @@ func _build_lexicon_overlay() -> void:
 		var tb := Button.new()
 		var t_code: String = tab_spec[0]
 		tb.text = tab_spec[1]
-		tb.custom_minimum_size = Vector2(110, 30)
+		tb.custom_minimum_size = Vector2(108, 30)
 		tb.add_theme_font_size_override("font_size", 12)
 		tb.pressed.connect(func():
 			audio.play_sfx("click")
@@ -932,7 +1114,57 @@ func _populate_lexicon_grid() -> void:
 	for ch in lexicon_grid.get_children():
 		ch.queue_free()
 
-	var tier_names := ["Level 1: New", "Level 2: Read & Shoot", "Level 3: Audio Only", "Level 4: Phrases", "★ Mastered"]
+	if lexicon_tab == "PHRASES":
+		lexicon_grid.columns = 2
+		for dp in VocabData.DAILY_PHRASES:
+			var pcard := PanelContainer.new()
+			pcard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pcard.custom_minimum_size = Vector2(540, 108)
+			pcard.add_theme_stylebox_override(
+				"panel",
+				_make_panel_style(Color(0.11, 0.15, 0.22, 0.92), Color(1.0, 0.84, 0.36, 0.78), 10, 1)
+			)
+			lexicon_grid.add_child(pcard)
+
+			var pvb := VBoxContainer.new()
+			pvb.add_theme_constant_override("separation", 3)
+			pcard.add_child(pvb)
+
+			var pr1 := HBoxContainer.new()
+			pvb.add_child(pr1)
+			var map_i := clampi(int(dp["sector"]), 0, 8)
+			var sit_lbl := Label.new()
+			sit_lbl.text = "★ Map %d (%s)  •  %s" % [map_i + 1, VocabData.SECTORS[map_i]["name_fr"], str(dp["situation_en"])]
+			sit_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sit_lbl.clip_text = true
+			sit_lbl.add_theme_font_size_override("font_size", 12)
+			sit_lbl.add_theme_color_override("font_color", Color(0.98, 0.84, 0.42))
+			pr1.add_child(sit_lbl)
+
+			var p_audio := str(dp["audio"])
+			var p_btn := Button.new()
+			p_btn.text = "♪ Listen"
+			p_btn.custom_minimum_size = Vector2(76, 24)
+			p_btn.add_theme_font_size_override("font_size", 12)
+			p_btn.pressed.connect(func(): audio.play_voice(p_audio))
+			pr1.add_child(p_btn)
+
+			var fr_lbl := Label.new()
+			fr_lbl.text = "« %s »   —   %s" % [str(dp["phrase_fr"]), str(dp["phrase_en"])]
+			fr_lbl.clip_text = true
+			fr_lbl.add_theme_font_size_override("font_size", 14)
+			fr_lbl.add_theme_color_override("font_color", Color(1.0, 0.97, 0.90))
+			pvb.add_child(fr_lbl)
+
+			var tip_l := Label.new()
+			tip_l.text = "Chloé: %s" % str(dp["chloe_tip"])
+			tip_l.clip_text = true
+			tip_l.add_theme_font_size_override("font_size", 11)
+			tip_l.add_theme_color_override("font_color", Color(0.68, 0.94, 0.78))
+			pvb.add_child(tip_l)
+		return
+
+	var tier_names := ["Level 1: New", "Level 2: Phrase + Text", "Level 3: Listen Phrase", "Level 4: Spoken", "★ Mastered"]
 	var tier_cols := [
 		Color(0.75, 0.68, 0.58),
 		Color(0.98, 0.82, 0.36),
@@ -952,7 +1184,7 @@ func _populate_lexicon_grid() -> void:
 		var t_idx := clampi(int(c["tier"]), 0, 4)
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.custom_minimum_size = Vector2(228, 102)
+		card.custom_minimum_size = Vector2(228, 108)
 		card.add_theme_stylebox_override(
 			"panel",
 			_make_panel_style(Color(0.11, 0.14, 0.20, 0.88), tier_cols[t_idx], 10, 1)
@@ -964,6 +1196,7 @@ func _populate_lexicon_grid() -> void:
 		card.add_child(cv)
 
 		var r1 := HBoxContainer.new()
+		r1.add_theme_constant_override("separation", 4)
 		cv.add_child(r1)
 		var w_lbl := Label.new()
 		w_lbl.text = "%s  —  %s" % [item["fr_def"], item["en"]]
@@ -975,18 +1208,26 @@ func _populate_lexicon_grid() -> void:
 
 		var play_b := Button.new()
 		play_b.text = "♪"
-		play_b.tooltip_text = "Listen to pronunciation"
-		play_b.custom_minimum_size = Vector2(28, 24)
-		play_b.add_theme_font_size_override("font_size", 12)
+		play_b.tooltip_text = "Listen to word"
+		play_b.custom_minimum_size = Vector2(26, 22)
+		play_b.add_theme_font_size_override("font_size", 11)
 		play_b.pressed.connect(func(): audio.play_voice("word_%s.ogg" % vid))
 		r1.add_child(play_b)
 
-		var en_lbl := Label.new()
-		en_lbl.text = str(item["ipa"])
-		en_lbl.clip_text = true
-		en_lbl.add_theme_font_size_override("font_size", 12)
-		en_lbl.add_theme_color_override("font_color", Color(0.98, 0.84, 0.46))
-		cv.add_child(en_lbl)
+		var phr_b := Button.new()
+		phr_b.text = "♪ Phrase"
+		phr_b.tooltip_text = str(item.get("phrase_en", "Listen to everyday phrase"))
+		phr_b.custom_minimum_size = Vector2(62, 22)
+		phr_b.add_theme_font_size_override("font_size", 11)
+		phr_b.pressed.connect(func(): audio.play_voice("phrase_%s.ogg" % vid))
+		r1.add_child(phr_b)
+
+		var phr_lbl := Label.new()
+		phr_lbl.text = "« %s »" % str(item.get("phrase_fr", item["ipa"]))
+		phr_lbl.clip_text = true
+		phr_lbl.add_theme_font_size_override("font_size", 11)
+		phr_lbl.add_theme_color_override("font_color", Color(0.98, 0.84, 0.46))
+		cv.add_child(phr_lbl)
 
 		var st_lbl := Label.new()
 		var ok_n := int(c["correct"])
@@ -1044,9 +1285,12 @@ func _enter_menu() -> void:
 	player.visible = true
 	player.camera.current = true
 	player.position = Vector3(0.0, 0.30, 6.4)
-	player.look_toward_point(Vector3(0.0, 2.0, 0.4))
+	player.look_toward_point(Vector3(0.0, 1.9, -0.6))
 	player.controls_enabled = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	hud_root.visible = true
+	if _stats_panel:
+		_stats_panel.visible = false
 	radio_panel.visible = false
 	feedback_banner.visible = false
 	menu_panel.visible = true
@@ -1059,75 +1303,54 @@ func _enter_menu() -> void:
 	_refresh_menu_labels()
 	_spawn_menu_portals()
 	var s_info := VocabData.SECTORS[act_s]
-	_chloe_say(str(s_info.get("chloe_intro", "Salut ! Walk into the golden portal or shoot it to start!")), "chloe_welcome.ogg")
+	_chloe_say(str(s_info.get("chloe_intro", "« Bonjour ! Bienvenue au café parisien ! »")), "chloe_welcome_%d.ogg" % act_s)
 
 
 func _spawn_menu_portals() -> void:
 	_clear_drones()
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	_apply_map_theme(act_s)
-	var s_info := VocabData.SECTORS[act_s]
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	var sec_ids := VocabData.get_sector_ids(act_s)
-	var center_vid: String = sec_ids[0] if not sec_ids.is_empty() else "pomme"
-
-	# 1. Center Play Portal Gate (Walk into it with W or Shoot it!)
-	var p_start := TargetDrone.new()
-	drones_root.add_child(p_start)
-	p_start.setup(center_vid, Vector3(0.0, 2.05, 0.4), player.global_position, 0.12, 1.25, "PORTAL_START")
-	p_start.configure_as_portal_crystal(
-		"▶ PLAY MAP %d: %s" % [act_s + 1, String(s_info["name_fr"]).to_upper()],
-		"%s  •  WALK IN [W] OR SHOOT TO START" % String(s_info["name_en"]),
-		Color(1.0, 0.84, 0.22)
-	)
-	active_drones.append(p_start)
-
-	# 2. Left Practice Range Portal
-	var p_gal := TargetDrone.new()
-	drones_root.add_child(p_gal)
-	p_gal.setup("couronne", Vector3(-4.8, 2.00, 1.1), player.global_position, 0.10, 1.05, "PORTAL_GALLERY")
-	p_gal.configure_as_portal_crystal(
-		"◈ PRACTICE RANGE",
-		"WALK IN OR SHOOT",
-		Color(0.28, 0.94, 0.58)
-	)
-	active_drones.append(p_gal)
-
-	# 3. Right Map Switcher Portal
-	var p_stg := TargetDrone.new()
-	drones_root.add_child(p_stg)
-	p_stg.setup("globe", Vector3(4.8, 2.00, 1.1), player.global_position, 0.10, 1.05, "PORTAL_STAGE")
-	p_stg.configure_as_portal_crystal(
-		"↻ SWITCH MAP (%d/9)" % [act_s + 1],
-		"SHOOT TO CHANGE MAP LOCATION",
-		Color(0.38, 0.82, 1.0)
-	)
-	active_drones.append(p_stg)
+	var xs := [-4.2, 0.0, 4.2]
+	for i in range(mini(3, sec_ids.size())):
+		var vid: String = sec_ids[i]
+		var item := VocabData.get_by_id(vid)
+		var d := TargetDrone.new()
+		drones_root.add_child(d)
+		d.setup(vid, Vector3(xs[i], 1.82, -0.6), player.global_position, 0.08, 1.15, "PORTAL_START")
+		d.is_portal_crystal = true
+		d.show_calibration_card(str(item.get("fr_def", vid)), str(item.get("en", "")))
+		active_drones.append(d)
 
 
 func _refresh_menu_labels() -> void:
 	var st := srs.get_summary_stats()
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	var s_info := VocabData.SECTORS[act_s]
-	menu_stats_lbl.text = "◈ Map %d/9: %s (%s)  •  Words Mastered: %d/%d" % [
+	menu_stats_lbl.text = "◈ Place %d/9 : %s (%s)   •   Words Learned: %d/%d" % [
 		act_s + 1, s_info["name_fr"], s_info["name_en"], st["seen"], st["total_words"]
 	]
+	if sector_btn:
+		sector_btn.text = "↻ Change Place (%d/9)" % [act_s + 1]
 	if prompt_main_lbl:
-		prompt_main_lbl.text = "Walk into the Golden Portal [W] or Shoot It to Play!"
+		prompt_main_lbl.text = "Click [▶ Commencer / Start] or Press [Space] to Begin!"
 	if prompt_sub_lbl:
 		prompt_sub_lbl.visible = false
 
 
 func _on_cycle_sector() -> void:
 	audio.play_sfx("click")
-	var order := [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, -5]
-	var cur_idx := order.find(srs.sector_filter)
-	srs.sector_filter = order[(cur_idx + 1) % order.size()]
+	var order := [0, 1, 2, 3, 4, 5, 6, 7, 8]
+	var act_cur := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
+	var next_s := (act_cur + 1) % order.size()
+	srs.sector_filter = next_s
 	srs.save_progress()
-	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-	_apply_map_theme(act_s)
+	_apply_map_theme(next_s)
 	_refresh_menu_labels()
-	var s_info := VocabData.SECTORS[act_s]
-	_chloe_say(str(s_info.get("chloe_intro", "")))
+	var s_info := VocabData.SECTORS[next_s]
+	_chloe_say(str(s_info.get("chloe_intro", "")), "chloe_welcome_%d.ogg" % next_s)
 	if state == GameState.MENU:
 		_spawn_menu_portals()
 
@@ -1145,6 +1368,8 @@ func _on_start_mission_pressed() -> void:
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
+	if _stats_panel:
+		_stats_panel.visible = true
 	radio_panel.visible = true
 	hover_info_lbl.text = ""
 	_set_gallery_visible(false)
@@ -1152,8 +1377,8 @@ func _on_start_mission_pressed() -> void:
 	_apply_map_theme(act_s)
 	player.visible = true
 	player.camera.current = true
-	player.position = Vector3(0.0, 0.30, 6.8)
-	player.look_toward_point(Vector3(0.0, 2.1, -0.8))
+	player.position = Vector3(0.0, 0.30, 6.6)
+	player.look_toward_point(Vector3(0.0, 1.9, -0.6))
 	player.controls_enabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -1167,17 +1392,21 @@ func _on_enter_gallery_pressed() -> void:
 	state = GameState.GALLERY
 	prompt_active = false
 	_clear_drones()
+	if _display_tables_root:
+		_display_tables_root.visible = false
 	_set_gallery_visible(true)
 	menu_panel.visible = false
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
+	if _stats_panel:
+		_stats_panel.visible = true
 	radio_panel.visible = true
 	feedback_banner.visible = false
 	player.visible = true
 	player.camera.current = true
-	player.position = Vector3(0.0, 0.30, -7.0)
-	player.look_toward_point(Vector3(0.0, 1.6, -13.2))
+	player.position = Vector3(0.0, 0.30, 6.6)
+	player.look_toward_point(Vector3(0.0, 1.6, -0.6))
 	player.controls_enabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -1185,27 +1414,25 @@ func _on_enter_gallery_pressed() -> void:
 		gallery_sector = srs.sector_filter
 	elif srs.sector_filter == -1:
 		gallery_sector = srs.get_active_campaign_sector()
-	elif srs.sector_filter == -3:
-		gallery_sector = 4
-	elif srs.sector_filter == -4:
-		gallery_sector = 7
 	else:
 		gallery_sector = 0
 	_load_gallery_sector(gallery_sector)
-	audio.play_voice("radio_welcome.ogg")
 
 
 func _load_gallery_sector(sec_idx: int) -> void:
 	gallery_sector = clampi(sec_idx, 0, VocabData.SECTORS.size() - 1)
 	_apply_map_theme(gallery_sector)
+	if _display_tables_root:
+		_display_tables_root.visible = false
 	var ids := VocabData.get_sector_ids(gallery_sector)
 	_refresh_gallery_pedestals(ids)
 	var s_info := VocabData.SECTORS[gallery_sector]
-	speaker_lbl.text = "◈ 3D PRACTICE GALLERY (%s)" % s_info["cefr"]
-	mode_tag_lbl.text = "Press [1–9] to Switch Map (1–9)  •  Press [M] to Start Combat Round"
-	prompt_main_lbl.text = "◈ Map %d: %s  (%s)" % [gallery_sector + 1, s_info["name_fr"], s_info["name_en"]]
-	prompt_sub_lbl.text = "Pronunciation Focus: %s — Shoot any pedestal to hear native French audio!" % s_info["focus"]
-	_chloe_say("Practice Range for %s! Shoot any pedestal to hear its native pronunciation, or press [1–9] to switch maps." % s_info["name_fr"])
+	speaker_lbl.text = "◈ 3D WORD EXHIBITION (%s)" % s_info["cefr"]
+	mode_tag_lbl.text = "Press [1–9] to Switch Place  •  Press [M] to Play Round"
+	prompt_main_lbl.text = "◈ %s  (%s)" % [s_info["name_fr"], s_info["name_en"]]
+	prompt_sub_lbl.text = ""
+	_update_stats_hud()
+	_chloe_say("« Voici %s ! Tirez sur un objet pour écouter la phrase. » (Shoot any pedestal to hear its spoken French phrase!)" % s_info["name_fr"], "chloe_welcome_%d.ogg" % gallery_sector)
 	timer_bar.value = 100.0
 
 
@@ -1217,7 +1444,6 @@ func _begin_wave() -> void:
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	_apply_map_theme(act_s)
 	_update_stats_hud()
-	# Jump straight into active, well-paced 6-shot Combat Rounds!
 	_start_combat_wave()
 
 
@@ -1232,10 +1458,10 @@ func _start_calibration_phase() -> void:
 		var vid := calibration_queue[i]
 		var item := VocabData.get_by_id(vid)
 		var spread := (float(i) - float(count - 1) * 0.5) * 4.2
-		var pos := Vector3(spread, 2.15, -0.2)
+		var pos := Vector3(spread, 1.82, -0.6)
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup(vid, pos, player.global_position, 0.20, 1.10)
+		d.setup(vid, pos, player.global_position, 0.12, 1.15)
 		d.show_calibration_card("%s (%s)" % [item["fr_def"], item["fr_indef"]], item["en"])
 		d.set_beacon(i == 0, Color(0.18, 0.96, 0.62) if i == 0 else Color(0.3, 0.5, 0.7))
 		active_drones.append(d)
@@ -1254,7 +1480,7 @@ func _focus_next_calibration_target() -> void:
 		if is_instance_valid(d):
 			d.set_beacon(d.vocab_id == current_calib_id, Color(0.18, 0.96, 0.62))
 
-	speaker_lbl.text = "♪ LT. DENISE (STAGE INTRO %s)" % item.get("cefr", "A1")
+	speaker_lbl.text = "♪ CHLOÉ (STAGE INTRO %s)" % item.get("cefr", "A1")
 	mode_tag_lbl.text = "NEW WORD SPOTLIGHT  •  SHOOT TO LEARN (%d left)" % calibration_queue.size()
 	prompt_main_lbl.text = "« %s  •  %s »   =   %s" % [item["fr_indef"], item["fr_def"], item["en"]]
 	prompt_sub_lbl.text = str(item["tip"])
@@ -1286,13 +1512,16 @@ func _next_combat_prompt() -> void:
 	current_spec = srs.build_wave_prompt_spec(prompt_in_wave, wave_number)
 	var ptype := str(current_spec.get("prompt_type", "VOCAB"))
 
+	if _display_tables_root:
+		_display_tables_root.visible = (ptype in ["VOCAB", "SCENARIO", "MODIFIER"])
+
 	if ptype == "DIRECTION":
 		_spawn_direction_drones(current_spec)
 	elif ptype == "MODIFIER":
 		_spawn_modifier_drones(current_spec)
 	elif ptype == "SCENARIO":
 		_spawn_scenario_drones(current_spec)
-	elif ptype == "GRAMMAR":
+	elif ptype in ["GRAMMAR", "DAILY_PHRASE"]:
 		_spawn_grammar_drones(current_spec)
 	else:
 		_spawn_vocab_drones(current_spec)
@@ -1304,23 +1533,34 @@ func _next_combat_prompt() -> void:
 	prompt_hint_stage = 0
 	prompt_wrong_ids.clear()
 
-	# Have Chloé give a warm, friendly tip for the current challenge
+	# Chloé speaks French-first with concise English context
 	if ptype == "DIRECTION":
-		_chloe_say(str(current_spec.get("chloe_tip", "Move onto the glowing directional pad or shoot its crystal!")))
+		_chloe_say(str(current_spec.get("chloe_tip", "« Suivez les directions au sol ! » (Follow the glowing floor pads!)")))
+	elif ptype == "DAILY_PHRASE":
+		_chloe_say("« En France (%s) : » %s" % [
+			str(current_spec.get("situation_en", "Everyday French")),
+			str(current_spec.get("chloe_tip", ""))
+		])
 	elif ptype == "VOCAB":
 		var item := VocabData.get_by_id(str(current_spec.get("target_id", "")))
-		var s_info := VocabData.SECTORS[clampi(int(item.get("sector", act_s)), 0, 8)]
 		var tier := int(current_spec.get("tier", 0))
 		if tier == 0:
-			_chloe_say("New word in %s: « %s » (%s)! %s" % [str(s_info["name_fr"]), str(item.get("fr_def", "")), str(item.get("en", "")), str(item.get("tip", ""))])
+			_chloe_say("« Voici %s ! » (%s) — Phrase : « %s »" % [
+				str(item.get("fr_def", "")),
+				str(item.get("en", "")),
+				str(item.get("phrase_fr", ""))
+			])
 		elif tier == 1:
-			_chloe_say("Spot « %s »! %s" % [str(item.get("fr_def", "")), str(item.get("tip", ""))])
+			_chloe_say("« %s » (%s)" % [
+				str(item.get("phrase_fr", "")),
+				str(item.get("phrase_en", ""))
+			])
 		else:
-			_chloe_say("Listen closely in %s! Press [E] to replay or [H] if you want a hint from me." % str(s_info["name_fr"]))
+			_chloe_say("« Écoutez bien la phrase ! » (Listen to the spoken French phrase! [E] Replay • [H] Hint)")
 	elif ptype == "MODIFIER":
-		_chloe_say("Look at the size, speed, or position! %s" % str(current_spec.get("sub_en", "")))
+		_chloe_say("« Observez bien ! » %s" % str(current_spec.get("sub_en", "")))
 	elif ptype == "SCENARIO":
-		_chloe_say("Real-life phrase: %s" % str(current_spec.get("sub_en", "")))
+		_chloe_say("« Phrase utile : » %s" % str(current_spec.get("sub_en", "")))
 
 	_refresh_prompt_hud()
 	_update_stats_hud()
@@ -1334,6 +1574,8 @@ func _spawn_direction_drones(spec: Dictionary) -> void:
 	_dir_step_idx = 0
 	if direction_pads_root:
 		direction_pads_root.visible = true
+	if _display_tables_root:
+		_display_tables_root.visible = false
 
 	var order := ["gauche", "avant", "haut", "arriere", "droite"]
 	for i in range(order.size()):
@@ -1342,9 +1584,8 @@ func _spawn_direction_drones(spec: Dictionary) -> void:
 		var pad_pos: Vector3 = d_info["pos"]
 		var drone := TargetDrone.new()
 		drones_root.add_child(drone)
-		var c_pos := pad_pos + Vector3(0.0, 0.85, 0.0)
-		drone.setup("etoile", c_pos, player.global_position, 0.14, 0.52, "DIR_" + d_key)
-		drone.set_slot_badge(i + 1)
+		var c_pos := pad_pos + Vector3(0.0, 0.55, 0.0)
+		drone.setup("dir_pad", c_pos, player.global_position, 0.0, 0.50, "DIR_" + d_key)
 		active_drones.append(drone)
 
 	_update_direction_pads_visuals()
@@ -1376,13 +1617,6 @@ func _update_direction_pads_visuals() -> void:
 			lbl.modulate = Color(0.88, 0.94, 1.0)
 			lbl.text = str(d_info["badge"])
 
-	for d in active_drones:
-		if is_instance_valid(d) and not d.is_destroyed and d.drone_tag.begins_with("DIR_"):
-			var d_key := d.drone_tag.trim_prefix("DIR_")
-			var is_cur: bool = (d_key == cur_key)
-			var col: Color = Color(1.0, 0.86, 0.22) if is_cur else Color(0.38, 0.82, 1.0)
-			d.set_beacon(is_cur, col)
-
 
 func _check_direction_progress() -> void:
 	if state != GameState.COMBAT or not prompt_active or not is_instance_valid(player):
@@ -1397,7 +1631,6 @@ func _check_direction_progress() -> void:
 	var p_pos := player.global_position
 	var flat_dist := Vector2(p_pos.x - pad_pos.x, p_pos.z - pad_pos.z).length()
 	if cur_key == "haut":
-		# Central Jump Plinth or jumping in place triggers "En haut !"
 		if (flat_dist < 2.25 and p_pos.y > 0.42) or p_pos.y > 0.85:
 			_advance_direction_step(pad_pos)
 	else:
@@ -1405,7 +1638,7 @@ func _check_direction_progress() -> void:
 			_advance_direction_step(pad_pos)
 
 
-func _advance_direction_step(from_pos: Vector3) -> void:
+func _advance_direction_step(_from_pos: Vector3) -> void:
 	if _dir_step_idx + 1 < _dir_steps.size():
 		_dir_step_idx += 1
 		score += 75
@@ -1416,7 +1649,7 @@ func _advance_direction_step(from_pos: Vector3) -> void:
 		_update_direction_pads_visuals()
 		_refresh_prompt_hud()
 		_update_stats_hud()
-		_chloe_say("Bien ! Step %d/%d: now go « %s » (%s)!" % [_dir_step_idx + 1, _dir_steps.size(), str(next_info["fr"]), str(next_info["en"])])
+		_chloe_say("« Très bien ! Maintenant : %s ! » (%s)" % [str(next_info["fr"]), str(next_info["en"])])
 	else:
 		prompt_active = false
 		feedback_banner.visible = false
@@ -1425,47 +1658,39 @@ func _advance_direction_step(from_pos: Vector3) -> void:
 		wave_hits_clean += 1
 		var pts := 125 + _dir_steps.size() * 50
 		score += pts
-		_spawn_ground_pickup(from_pos + Vector3(0.0, 0.6, 0.0))
 		srs.global_step += 1
 		srs.save_progress()
 		prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])]
-		_chloe_say("Super mouvement ! You nailed « %s » (%s)!" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])])
+		_chloe_say("« Bravo ! %s ! » (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])], "chloe_bravo_%d.ogg" % ((combo % 3) + 1))
 		_update_stats_hud()
 		transition_delay = 1.05
 
 
 func _spawn_vocab_drones(spec: Dictionary) -> void:
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	var target_id := str(spec["target_id"])
 	var tier := int(spec.get("tier", 0))
-	var decoy_count := 2 if tier == 0 else 3
-	var distractors := srs.select_distractors(target_id, decoy_count, str(spec["required_decoy"]))
+	var distractors := srs.select_distractors(target_id, 2, str(spec["required_decoy"]))
 	var spawn_ids: Array[String] = [target_id]
 	spawn_ids.append_array(distractors)
 	spawn_ids.shuffle()
 
-	var n := spawn_ids.size()
-	var xs3 := [-4.6, 0.0, 4.6]
-	var xs4 := [-6.4, -2.2, 2.2, 6.4]
+	var n := mini(3, spawn_ids.size())
+	var xs3 := [-4.2, 0.0, 4.2]
 	for i in range(n):
-		var sx: float = xs3[i] if n == 3 else (xs4[i] if i < 4 else (float(i - 2) * 3.5))
-		var sz: float = -0.5 if tier == 0 else (-2.6 if (i % 2 == 0) else -3.6)
-		var height := 2.15 + (0.35 if (i % 2 == 1 and tier > 0) else 0.0)
+		var sx: float = xs3[i]
+		var sz: float = -0.6
+		var height := 1.82
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		var mv := 0.25 if tier == 0 else (0.95 + float(mini(wave_number, 5)) * 0.10)
-		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, mv, 1.15)
+		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, 0.10, 1.16)
 		d.set_slot_badge(i + 1)
-		if tier == 0:
-			d.approach_speed = 0.0
-			if spawn_ids[i] == target_id:
-				var item := VocabData.get_by_id(target_id)
-				d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")))
-		else:
-			d.approach_speed = 0.56 + float(mini(wave_number, 6)) * 0.06
-			d.defense_z = 3.6
-			d.can_fire_plasma = true
-			d.reached_defense_line.connect(_on_drone_reached_defense_line)
-			d.fired_plasma.connect(_spawn_enemy_plasma)
+		d.approach_speed = 0.0
+		d.can_fire_plasma = false
+		if tier == 0 and spawn_ids[i] == target_id:
+			var item := VocabData.get_by_id(target_id)
+			d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")))
 		active_drones.append(d)
 
 
@@ -1482,7 +1707,7 @@ func _on_drone_reached_defense_line(drone: TargetDrone) -> void:
 		_play_slow_assist()
 		var item := VocabData.get_by_id(target_tag)
 		_show_feedback(
-			"! Barricade hit! Shoot the gold-highlighted target: %s (%s)" % [
+			"! Shoot the gold-highlighted target: %s (%s)" % [
 				item.get("fr_def", target_tag), item.get("en", "")
 			],
 			false
@@ -1491,135 +1716,124 @@ func _on_drone_reached_defense_line(drone: TargetDrone) -> void:
 
 
 func _spawn_scenario_drones(spec: Dictionary) -> void:
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	var target_id := str(spec["target_id"])
 	var decoys: Array = spec.get("decoys", [])
 	var spawn_ids: Array[String] = [target_id]
 	for dec in decoys:
 		var ds := str(dec)
-		if ds != target_id and not spawn_ids.has(ds):
+		if ds != target_id and not spawn_ids.has(ds) and spawn_ids.size() < 3:
 			spawn_ids.append(ds)
 	spawn_ids.shuffle()
 
-	var n := spawn_ids.size()
-	var xs4 := [-6.2, -2.1, 2.1, 6.2]
+	var n := mini(3, spawn_ids.size())
+	var xs3 := [-4.2, 0.0, 4.2]
 	for i in range(n):
-		var sx: float = xs4[i] if i < 4 else (float(i - 2) * 3.5)
-		var sz := -2.2 if (i % 2 == 0) else -3.0
-		var height := 2.18
+		var sx: float = xs3[i]
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, 0.55, 1.15)
+		d.setup(spawn_ids[i], Vector3(sx, 1.82, -0.6), player.global_position, 0.10, 1.16)
 		d.set_slot_badge(i + 1)
-		d.approach_speed = 0.45
-		d.defense_z = 3.2
-		d.can_fire_plasma = true
-		d.reached_defense_line.connect(_on_drone_reached_defense_line)
-		d.fired_plasma.connect(_spawn_enemy_plasma)
+		d.approach_speed = 0.0
+		d.can_fire_plasma = false
 		active_drones.append(d)
 
 
 func _spawn_grammar_drones(spec: Dictionary) -> void:
+	if _display_tables_root:
+		_display_tables_root.visible = false
 	var opts: Array = spec["options"].duplicate()
 	opts.shuffle()
-	var xs := [-6.2, -2.1, 2.1, 6.2]
-	for i in range(opts.size()):
+	var xs3 := [-4.3, 0.0, 4.3]
+	var xs4 := [-5.6, -1.9, 1.9, 5.6]
+	var n := opts.size()
+	for i in range(n):
 		var opt_txt := str(opts[i])
-		var pos := Vector3(xs[i], 2.25, -0.5)
+		var sx: float = xs3[i] if n == 3 else (xs4[i] if i < 4 else 0.0)
+		var pos := Vector3(sx, 2.05, -0.6)
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup("holo_crystal", pos, player.global_position, 0.22, 1.15, opt_txt)
+		d.setup("holo_crystal", pos, player.global_position, 0.08, 1.08, opt_txt)
 		d.configure_as_grammar_crystal(opt_txt, i + 1)
 		active_drones.append(d)
 
 
 func _spawn_modifier_drones(spec: Dictionary) -> void:
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	var layout := str(spec["layout"])
 	var vid := str(spec["base_vocab_id"])
-	var xs4 := [-6.2, -2.1, 2.1, 6.2]
-	var target_slot := randi() % 4
+	var xs3 := [-4.2, 0.0, 4.2]
+	var target_slot := randi() % 3
 
 	if layout == "pos_left":
 		target_slot = 0
 	elif layout == "pos_right":
-		target_slot = 3
+		target_slot = 2
 	elif layout == "pos_middle":
-		var xs3 := [-5.2, 0.0, 5.2]
-		for i in range(3):
-			var is_t := (i == 1)
-			var d := TargetDrone.new()
-			drones_root.add_child(d)
-			d.setup(vid, Vector3(xs3[i], 2.20, -0.5), player.global_position, 0.15, 1.15, "MOD_TARGET" if is_t else ("DECOY_%d" % i))
-			d.set_slot_badge(i + 1)
-			d.custom_ok_label = "+150  ✓ Au milieu (In the middle)!"
-			d.custom_wrong_label = "✗ Shoot the MIDDLE one!"
-			active_drones.append(d)
-		return
+		target_slot = 1
 
-	for i in range(4):
+	for i in range(3):
 		var is_t := (i == target_slot)
 		var tag := "MOD_TARGET" if is_t else ("DECOY_%d" % i)
-		var pos := Vector3(xs4[i], 2.20, -0.5)
-		var mv := 0.45
+		var pos := Vector3(xs3[i], 1.82, -0.6)
+		var mv := 0.12
 		var sc := 1.0
 		var ok_lbl := "+150  ✓ Correct!"
 		var err_lbl := "✗ Wrong target!"
 
 		match layout:
 			"scale_max":
-				sc = 1.65 if is_t else (0.64 + float(i) * 0.08)
-				mv = 0.35
+				sc = 1.55 if is_t else (0.68 + float(i) * 0.08)
 				ok_lbl = "+150  ✓ La plus grande (Biggest)!"
 				err_lbl = "✗ Shoot the BIGGEST one!"
 			"scale_min":
-				sc = 0.56 if is_t else (1.18 + float(i) * 0.10)
-				mv = 0.35
+				sc = 0.58 if is_t else (1.22 + float(i) * 0.08)
 				ok_lbl = "+150  ✓ Le plus petit (Smallest)!"
 				err_lbl = "✗ Shoot the SMALLEST one!"
 			"speed_max":
-				mv = 2.60 if is_t else 0.18
+				mv = 2.20 if is_t else 0.12
 				ok_lbl = "+150  ✓ Le plus vite (Fastest)!"
 				err_lbl = "✗ Shoot the FASTEST one!"
 			"speed_zero":
-				mv = 0.0 if is_t else 1.65
+				mv = 0.0 if is_t else 1.55
 				ok_lbl = "+150  ✓ Immobile (Standing still)!"
 				err_lbl = "✗ Shoot the one STANDING STILL!"
 			"height_max":
-				pos.y = 3.85 if is_t else 1.50
-				mv = 0.30
+				pos.y = 3.20 if is_t else 1.65
 				ok_lbl = "+150  ✓ Le plus haut (Highest)!"
 				err_lbl = "✗ Shoot the HIGHEST one!"
 			"height_min":
-				pos.y = 1.25 if is_t else 3.55
-				mv = 0.30
+				pos.y = 1.45 if is_t else 3.05
 				ok_lbl = "+150  ✓ Le plus bas (Lowest)!"
 				err_lbl = "✗ Shoot the LOWEST one!"
 			"pos_left":
-				mv = 0.12
-				ok_lbl = "+150  ✓ À gauche (Far left)!"
-				err_lbl = "✗ Not on the far left!"
+				ok_lbl = "+150  ✓ À gauche (Left)!"
+				err_lbl = "✗ Shoot the LEFT one!"
 			"pos_right":
-				mv = 0.12
-				ok_lbl = "+150  ✓ À droite (Far right)!"
-				err_lbl = "✗ Not on the far right!"
+				ok_lbl = "+150  ✓ À droite (Right)!"
+				err_lbl = "✗ Shoot the RIGHT one!"
+			"pos_middle":
+				ok_lbl = "+150  ✓ Au milieu (Middle)!"
+				err_lbl = "✗ Shoot the MIDDLE one!"
 			"dist_min":
-				pos.z = 2.2 if is_t else -3.2
-				mv = 0.30
+				pos.z = 1.4 if is_t else -1.8
 				ok_lbl = "+150  ✓ Le plus proche (Closest)!"
 				err_lbl = "✗ Shoot the CLOSEST one!"
 			"dist_max":
-				pos.z = -3.8 if is_t else 1.8
-				mv = 0.30
+				pos.z = -2.4 if is_t else 1.2
 				ok_lbl = "+150  ✓ La plus éloignée (Furthest)!"
 				err_lbl = "✗ Shoot the FURTHEST one!"
 			"big_stationary":
 				if is_t:
-					sc = 1.60
+					sc = 1.52
 					mv = 0.0
 				elif i % 2 == 0:
-					sc = 1.60
-					mv = 1.80
+					sc = 1.52
+					mv = 1.60
 				else:
-					sc = 0.62
+					sc = 0.65
 					mv = 0.0
 				ok_lbl = "+150  ✓ Grand ET immobile!"
 				err_lbl = "✗ Must be BOTH big and still!"
@@ -1661,49 +1875,38 @@ func _refresh_prompt_hud() -> void:
 		return
 
 	if show_fr:
-		if ptype == "MODIFIER" and show_en:
+		if ptype == "DAILY_PHRASE":
+			prompt_main_lbl.text = "♪  %s" % str(current_spec["prompt_fr"])
+		elif ptype == "MODIFIER" and show_en:
 			var short_en := str(current_spec.get("sub_en", "")).split("•")[0].strip_edges()
 			prompt_main_lbl.text = "♪  %s   (%s)" % [str(current_spec["prompt_fr"]), short_en]
 		elif ptype == "VOCAB" and prompt_hint_stage >= 2 and int(current_spec.get("tier", 0)) >= 1:
 			var t_item := VocabData.get_by_id(str(current_spec.get("target_id", "")))
-			prompt_main_lbl.text = "♪  %s  =  %s" % [str(current_spec["prompt_fr"]), str(t_item.get("en", ""))]
+			prompt_main_lbl.text = "♪  %s   (%s)" % [str(current_spec["prompt_fr"]), str(t_item.get("phrase_en", t_item.get("en", "")))]
 		else:
 			prompt_main_lbl.text = "♪  %s" % str(current_spec["prompt_fr"])
 	else:
 		if ptype == "MODIFIER":
-			prompt_main_lbl.text = "◉ LISTEN: Size / Speed Challenge!  [E] Replay • [H] Hint"
+			prompt_main_lbl.text = "◉ ÉCOUTEZ : Size / Speed Challenge!  [E] Replay • [H] Hint"
 		elif int(current_spec["tier"]) >= 3:
-			prompt_main_lbl.text = "◉ LISTEN: French Clue!  [E] Replay • [H] Hint"
+			prompt_main_lbl.text = "◉ ÉCOUTEZ : Spoken French Phrase!  [E] Replay • [H] Hint"
 		else:
-			prompt_main_lbl.text = "◉ LISTEN & SHOOT!   [E] Replay  •  [H] Hint"
+			prompt_main_lbl.text = "◉ ÉCOUTEZ LA PHRASE & TIREZ !   [E] Replay  •  [H] Hint"
 
 	prompt_sub_lbl.visible = false
 
 
 # ==============================================================================
-# SHOOTING, PORTAL GATES, PLASMA DODGING, GOLD PICKUPS & INPUTS
+# SHOOTING, PORTAL GATES & INPUTS
 # ==============================================================================
 
 func _on_player_hovered(entity: Node) -> void:
 	if entity is PedestalStation:
-		var p := entity as PedestalStation
-		var item := VocabData.get_by_id(p.vocab_id)
 		_reticle_col = Color(0.45, 0.98, 0.58)
-		hover_info_lbl.text = "[Click] Hear: %s (%s)" % [item.get("fr_def", ""), item.get("en", "")]
+		hover_info_lbl.text = ""
 	elif entity is TargetDrone:
 		_reticle_col = Color(1.0, 0.88, 0.24)
-		var td := entity as TargetDrone
-		if td.drone_tag.begins_with("DIR_"):
-			hover_info_lbl.text = "Walk/Jump Onto Pad [WASD/Space] or Shoot [Click]"
-		elif td.is_portal_crystal:
-			hover_info_lbl.text = "Walk Into Portal [WASD] or Shoot [Click]"
-		elif td.is_grammar_crystal:
-			hover_info_lbl.text = "Option [%d]: %s" % [td.slot_number, td.grammar_option]
-		elif state == GameState.CALIBRATION:
-			var item := VocabData.get_by_id(td.vocab_id)
-			hover_info_lbl.text = "%s = %s" % [item.get("fr_def", ""), item.get("en", "")]
-		else:
-			hover_info_lbl.text = ""
+		hover_info_lbl.text = ""
 	else:
 		_reticle_col = Color(0.98, 0.90, 0.65, 0.92)
 		hover_info_lbl.text = ""
@@ -1716,11 +1919,11 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 		var ped := entity as PedestalStation
 		ped.trigger_scan_pulse()
 		audio.play_sfx("scan", 0.02, -4.0)
-		audio.play_voice("word_%s.ogg" % ped.vocab_id)
+		audio.play_voice("phrase_%s.ogg" % ped.vocab_id)
 		srs.mark_calibrated(ped.vocab_id)
 		var item := VocabData.get_by_id(ped.vocab_id)
-		prompt_main_lbl.text = "♪ %s  =  %s" % [item["fr_def"], item["en"]]
-		_chloe_say("« %s » (%s) — %s" % [item["fr_def"], item["en"], item["tip"]])
+		prompt_main_lbl.text = "♪ %s (%s)  —  « %s »" % [item["fr_def"], item["en"], item.get("phrase_fr", "")]
+		_chloe_say("« %s » (%s) — %s" % [item.get("phrase_fr", item["fr_def"]), item.get("phrase_en", item["en"]), item["tip"]])
 		return
 
 	if not (entity is TargetDrone):
@@ -1730,7 +1933,6 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 	if drone.is_destroyed:
 		return
 
-	# Shooting any 3D Portal Gate (except directional challenge beacons) activates or cycles it!
 	if drone.is_portal_crystal and not drone.drone_tag.begins_with("DIR_"):
 		_trigger_portal_tag(drone.drone_tag, true)
 		return
@@ -1769,7 +1971,7 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 					],
 					false
 				)
-				_chloe_say("Look for the bright gold pad: « %s » (%s)!" % [exp_info.get("fr", cur_key), exp_info.get("en", "")])
+				_chloe_say("« Pas de souci ! Cherchez : %s » (%s)" % [exp_info.get("fr", cur_key), exp_info.get("en", "")], "chloe_try_again.ogg")
 				_update_stats_hud()
 			return
 
@@ -1780,44 +1982,45 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 			feedback_banner.visible = false
 			audio.play_sfx("hit_ok", 0.02, -1.5)
 			var pts := 100
-			var fast_bonus := (drone.global_position.z < 0.0 and int(current_spec.get("tier", 0)) >= 1)
-			var action_shot := (not player.is_on_floor()) or (player._dash_timer > 0.0) or (player.global_position.z < 2.2)
 			if prompt_clean_try:
 				combo += 1
 				wave_hits_clean += 1
-				pts = (100 + combo * 25) + (50 if fast_bonus else 0) + (50 if action_shot else 0)
+				pts = 100 + combo * 25
 			else:
 				pts = 75
 			score += pts
-			if prompt_clean_try and drone.custom_ok_label == "":
+			if prompt_clean_try and drone.custom_ok_label == "" and not drone.is_grammar_crystal:
 				var f_item := VocabData.get_by_id(target_tag)
-				var bonus_tag := "ACTION SHOT!" if action_shot else ("FAST!" if fast_bonus else "✓")
-				drone.custom_ok_label = "+%d %s %s (%s)" % [pts, bonus_tag, f_item.get("fr_def", target_tag), f_item.get("en", "")]
+				drone.custom_ok_label = "+%d ✓ %s (%s)" % [pts, f_item.get("fr_def", target_tag), f_item.get("en", "")]
 
-			var drop_pos := drone.global_position
 			drone.explode_success(world_root, pts)
 			active_drones.erase(drone)
-			_spawn_ground_pickup(drop_pos)
+			var bravo_voice := "chloe_bravo_%d.ogg" % ((combo % 3) + 1)
 
-			if ptype == "GRAMMAR":
+			if ptype == "DAILY_PHRASE":
+				srs.global_step += 1
+				srs.save_progress()
+				prompt_main_lbl.text = "✓ « %s »  =  %s" % [str(current_spec["phrase_fr"]), str(current_spec["phrase_en"])]
+				_chloe_say("« Parfait ! %s » (%s)" % [str(current_spec["phrase_fr"]), str(current_spec["phrase_en"])], bravo_voice)
+			elif ptype == "GRAMMAR":
 				var gid := str(current_spec["grammar_id"])
 				srs.record_grammar_result(gid, prompt_clean_try, prompt_used_assist)
 				prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["sentence_full"]), str(current_spec["en"])]
+				_chloe_say("« Très bien ! %s »" % str(current_spec["sentence_full"]), bravo_voice)
 			elif ptype == "MODIFIER":
 				srs.global_step += 1
 				srs.save_progress()
 				prompt_main_lbl.text = "✓ %s" % str(current_spec["prompt_fr"])
-				_chloe_say("Bravo ! You spotted « %s »!" % str(current_spec["prompt_fr"]))
+				_chloe_say("« Bravo ! %s ! »" % str(current_spec["prompt_fr"]), bravo_voice)
 			else:
 				srs.record_result(target_tag, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 				var t_item := VocabData.get_by_id(target_tag)
-				prompt_main_lbl.text = "✓ %s  =  %s" % [t_item["fr_def"], t_item["en"]]
-				_chloe_say("Bien joué ! « %s » = %s.  %s" % [t_item["fr_def"], t_item["en"], t_item["tip"]])
+				prompt_main_lbl.text = "✓ %s (%s)  —  « %s »" % [t_item["fr_def"], t_item["en"], t_item.get("phrase_fr", "")]
+				_chloe_say("« Très bien ! %s » (%s)" % [t_item.get("phrase_fr", t_item["fr_def"]), t_item.get("phrase_en", t_item["en"])], bravo_voice)
 
 			_update_stats_hud()
 			transition_delay = 1.05
 		else:
-			# Wrong target shot: PAUSE all approaching drones & timer so the player can read and shoot the gold target at their own pace!
 			prompt_clean_try = false
 			combo = 0
 			shield_hp = maxf(10.0, shield_hp - 12.0)
@@ -1825,14 +2028,16 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 			audio.play_sfx("shield_hit", 0.01, -3.0)
 			drone.flash_wrong_hit()
 
-			if ptype == "GRAMMAR":
+			if ptype in ["GRAMMAR", "DAILY_PHRASE"]:
 				_highlight_true_target(target_tag)
+				_play_slow_assist()
 				_show_feedback(
-					"✗ Not « %s »! Shoot the gold-highlighted option « %s » to continue" % [
+					"✗ Not « %s »! Shoot the gold signboard: « %s »" % [
 						drone.grammar_option, target_tag
 					],
 					false
 				)
+				_chloe_say("« Pas de souci ! Choisissez : %s » (%s)" % [target_tag, str(current_spec.get("phrase_en", ""))], "chloe_try_again.ogg")
 			elif ptype == "MODIFIER":
 				_highlight_true_target("MOD_TARGET")
 				_show_feedback(
@@ -1841,7 +2046,7 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 					],
 					false
 				)
-				_chloe_say("Pas de souci ! Look for the gold-highlighted target (%s)!" % str(current_spec["prompt_fr"]))
+				_chloe_say("« Essayez encore ! Cherchez : %s »" % str(current_spec["prompt_fr"]), "chloe_try_again.ogg")
 			else:
 				if not prompt_wrong_ids.has(drone.vocab_id):
 					prompt_wrong_ids.append(drone.vocab_id)
@@ -1855,9 +2060,9 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 					],
 					false
 				)
-				_chloe_say("Pas de souci ! That was « %s » (%s). Shoot the gold target « %s » (%s)!" % [
+				_chloe_say("« Pas de souci ! Ça, c'est %s (%s). Tirez sur %s (%s) ! »" % [
 					hit_item["fr_def"], hit_item["en"], true_item["fr_def"], true_item["en"]
-				])
+				], "chloe_try_again.ogg")
 			_update_stats_hud()
 
 
@@ -1917,7 +2122,8 @@ func _show_feedback(msg: String, is_ok: bool) -> void:
 
 
 func _update_stats_hud() -> void:
-	wave_lbl.text = "MAP %d  •  ROUND %d  •  %d/%d" % [_active_map_idx + 1, wave_number, prompt_in_wave, PROMPTS_PER_WAVE]
+	var s_info := VocabData.SECTORS[clampi(_active_map_idx, 0, 8)]
+	wave_lbl.text = "%s  •  STEP %d/%d" % [String(s_info["name_fr"]).to_upper(), prompt_in_wave, PROMPTS_PER_WAVE]
 	score_lbl.text = "SCORE: %d  (STREAK x%d)" % [score, maxi(1, combo)]
 	shield_bar.value = shield_hp
 
@@ -1930,37 +2136,28 @@ func _finish_wave() -> void:
 	summary_panel.visible = false
 	hud_root.visible = true
 	player.controls_enabled = true
+	if _display_tables_root:
+		_display_tables_root.visible = true
 
 	audio.play_sfx("wave_up")
 
-	var prev_map: int = _active_map_idx
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	_apply_map_theme(act_s)
 	var s_info := VocabData.SECTORS[act_s]
 	radio_panel.visible = true
-	prompt_main_lbl.text = "★ ROUND %d CLEAR (%d/%d)!  Walk Into the Golden Portal!" % [
+	prompt_main_lbl.text = "★ MANCHE %d TERMINÉE (%d/%d) !   Press [Space] or Shoot Star to Continue!" % [
 		wave_number, wave_hits_clean, PROMPTS_PER_WAVE
 	]
 	timer_bar.value = 100.0
 
-	if act_s != prev_map:
-		_chloe_say("Bravo ! New Map Unlocked: Map %d — %s (%s)!" % [act_s + 1, s_info["name_fr"], s_info["name_en"]], "chloe_map_up.ogg")
-	else:
-		_chloe_say("Super travail ! Round %d complete! Walk into the golden portal when you're ready for Round %d." % [wave_number, wave_number + 1], "chloe_round_clear.ogg")
+	_chloe_say("« Félicitations ! Manche terminée ! On continue ? » (Round %d complete! Press [Space] or shoot the star for Round %d!)" % [wave_number, wave_number + 1], "chloe_round_done.ogg")
 
-	# Spawn a glowing 3D Portal Gate in the courtyard + collectible Gold Stars on the floor!
 	var p_next := TargetDrone.new()
 	drones_root.add_child(p_next)
-	p_next.setup("etoile", Vector3(0.0, 2.05, 0.4), player.global_position, 0.18, 1.30, "PORTAL_NEXT_WAVE")
-	p_next.configure_as_portal_crystal(
-		"★ NEXT ROUND (ROUND %d)" % (wave_number + 1),
-		"Map %d: %s (%s)  •  Walk In [WASD] or Shoot!" % [act_s + 1, s_info["name_fr"], s_info["name_en"]],
-		Color(1.0, 0.84, 0.22)
-	)
+	p_next.setup("etoile", Vector3(0.0, 1.82, -0.6), player.global_position, 0.14, 1.25, "PORTAL_NEXT_WAVE")
+	p_next.is_portal_crystal = true
+	p_next.show_calibration_card("★ MANCHE %d" % (wave_number + 1), "%s (%s) • [Space] / Shoot" % [s_info["name_fr"], s_info["name_en"]])
 	active_drones.append(p_next)
-
-	_spawn_ground_pickup(Vector3(-2.6, 0.85, 2.4))
-	_spawn_ground_pickup(Vector3(2.6, 0.85, 2.4))
 
 
 func _clear_drones() -> void:
@@ -1986,176 +2183,20 @@ func _clear_projectiles_and_pickups() -> void:
 			ch.queue_free()
 
 
-func _spawn_enemy_plasma(origin_pos: Vector3) -> void:
-	if state != GameState.COMBAT or not prompt_active or not is_instance_valid(player):
-		return
-	if _projectiles.size() >= 4:
-		return
-
-	var orb := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.24
-	sm.height = 0.48
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.36, 0.18)
-	sm.material = mat
-	orb.mesh = sm
-
-	var halo := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.42
-	hm.height = 0.84
-	var hmat := StandardMaterial3D.new()
-	hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	hmat.albedo_color = Color(1.0, 0.65, 0.20, 0.38)
-	hm.material = hmat
-	halo.mesh = hm
-	orb.add_child(halo)
-
-	projectiles_root.add_child(orb)
-	orb.global_position = origin_pos + Vector3(0.0, 0.1, 0.45)
-
-	var aim_pos := player.global_position + Vector3(0.0, 1.25, 0.0)
-	var dir := (aim_pos - orb.global_position).normalized()
-	_projectiles.append({
-		"node": orb,
-		"vel": dir * 7.8,
-		"life": 4.2,
-		"dodged_awarded": false
-	})
+func _spawn_enemy_plasma(_origin_pos: Vector3) -> void:
+	return
 
 
-func _update_projectiles(delta: float) -> void:
-	if _projectiles.is_empty():
-		return
-	var dt := minf(delta, 0.04)
-	var space_state := get_world_3d().direct_space_state
-	var p_center := player.global_position + Vector3(0.0, 1.2, 0.0)
-
-	for i in range(_projectiles.size() - 1, -1, -1):
-		var p: Dictionary = _projectiles[i]
-		var node: Node3D = p["node"]
-		if not is_instance_valid(node):
-			_projectiles.remove_at(i)
-			continue
-
-		var old_pos := node.global_position
-		var vel: Vector3 = p["vel"]
-		var next_pos := old_pos + vel * dt
-		p["life"] = float(p["life"]) - dt
-
-		# Check if blocked by stone cover pillars/walls (collision mask 1)
-		var q := PhysicsRayQueryParameters3D.create(old_pos, next_pos, 1)
-		var hit := space_state.intersect_ray(q)
-		if not hit.is_empty():
-			node.queue_free()
-			_projectiles.remove_at(i)
-			continue
-
-		node.global_position = next_pos
-		var dist := next_pos.distance_to(p_center)
-		if dist < 0.88:
-			# Hit player!
-			shield_hp = maxf(10.0, shield_hp - 8.0)
-			_damage_flash_timer = 0.35
-			audio.play_sfx("shield_hit", 0.02, -3.0)
-			_update_stats_hud()
-			node.queue_free()
-			_projectiles.remove_at(i)
-			continue
-		elif not bool(p["dodged_awarded"]) and next_pos.z > p_center.z + 0.6 and dist < 3.6:
-			p["dodged_awarded"] = true
-			score += 25
-			_update_stats_hud()
-
-		if float(p["life"]) <= 0.0 or next_pos.z > 12.0 or absf(next_pos.x) > 15.0:
-			node.queue_free()
-			_projectiles.remove_at(i)
+func _update_projectiles(_delta: float) -> void:
+	return
 
 
-func _spawn_ground_pickup(world_pos: Vector3) -> void:
-	if not pickups_root:
-		return
-	var root := Node3D.new()
-	pickups_root.add_child(root)
-	var gz := clampf(world_pos.z, -2.5, 5.5)
-	var gx := clampf(world_pos.x, -6.5, 6.5)
-	root.global_position = Vector3(gx, 0.85, gz)
-
-	var star_model := Node3D.new()
-	var star_scene := load("res://assets/models/etoile.blend") as PackedScene
-	if star_scene:
-		var inst := star_scene.instantiate() as Node3D
-		if inst:
-			star_model.add_child(inst)
-	star_model.scale = Vector3.ONE * 0.72
-	root.add_child(star_model)
-
-	var ring := MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.48
-	tm.outer_radius = 0.56
-	var rmat := StandardMaterial3D.new()
-	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rmat.albedo_color = Color(1.0, 0.86, 0.22)
-	tm.material = rmat
-	ring.mesh = tm
-	ring.position = Vector3(0.0, -0.45, 0.0)
-	root.add_child(ring)
-
-	var lbl := Label3D.new()
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.pixel_size = 0.0042
-	lbl.font_size = 36
-	lbl.outline_size = 10
-	lbl.modulate = Color(1.0, 0.92, 0.32)
-	lbl.outline_modulate = Color(0.08, 0.05, 0.02, 0.96)
-	lbl.text = "★ +75"
-	lbl.position = Vector3(0.0, 0.72, 0.0)
-	root.add_child(lbl)
-
-	_pickups.append({
-		"node": root,
-		"model": star_model,
-		"life": 14.0,
-		"phase": randf() * TAU
-	})
+func _spawn_ground_pickup(_world_pos: Vector3) -> void:
+	return
 
 
-func _update_pickups(delta: float) -> void:
-	if _pickups.is_empty() or not is_instance_valid(player):
-		return
-	var p_pos := player.global_position
-	for i in range(_pickups.size() - 1, -1, -1):
-		var pk: Dictionary = _pickups[i]
-		var node: Node3D = pk["node"]
-		if not is_instance_valid(node):
-			_pickups.remove_at(i)
-			continue
-		pk["life"] = float(pk["life"]) - delta
-		var ph := float(pk["phase"]) + delta * 3.4
-		pk["phase"] = ph
-		var mdl: Node3D = pk["model"]
-		if is_instance_valid(mdl):
-			mdl.rotation.y += delta * 2.6
-			mdl.position.y = sin(ph) * 0.14
-
-		var flat_dist := Vector2(node.global_position.x - p_pos.x, node.global_position.z - p_pos.z).length()
-		if flat_dist < 1.85:
-			score += 75
-			shield_hp = minf(100.0, shield_hp + 15.0)
-			audio.play_sfx("hit_ok", 0.04, -2.5)
-			_update_stats_hud()
-			node.queue_free()
-			_pickups.remove_at(i)
-			continue
-
-		if float(pk["life"]) <= 0.0:
-			node.queue_free()
-			_pickups.remove_at(i)
+func _update_pickups(_delta: float) -> void:
+	return
 
 
 func _check_portal_collisions() -> void:
@@ -2215,7 +2256,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if state == GameState.MENU:
-		if kc in [KEY_ENTER, KEY_KP_ENTER, KEY_1]:
+		if kc in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_1]:
 			_on_start_mission_pressed()
 		elif kc == KEY_G:
 			_on_enter_gallery_pressed()
@@ -2252,8 +2293,8 @@ func _process(delta: float) -> void:
 
 	if chloe_bot:
 		var t_sec := Time.get_ticks_msec() * 0.001
-		chloe_bot.position.y = 1.50 + sin(t_sec * 2.6) * 0.08
-		chloe_bot.rotation.y = 0.55 + sin(t_sec * 1.4) * 0.18
+		chloe_bot.position.y = sin(t_sec * 2.2) * 0.025
+		chloe_bot.rotation.y = 0.42 + sin(t_sec * 1.1) * 0.08
 
 	if crosshair_reticle and player:
 		var hit_flash := _reticle_col if _damage_flash_timer <= 0.0 else Color(1.0, 0.25, 0.18)
@@ -2265,8 +2306,6 @@ func _process(delta: float) -> void:
 	elif _damage_flash and _damage_flash.color.a > 0.0:
 		_damage_flash.color = Color(1.0, 0.22, 0.14, 0.0)
 
-	_update_projectiles(delta)
-	_update_pickups(delta)
 	if state in [GameState.MENU, GameState.WAVE_SUMMARY]:
 		_check_portal_collisions()
 	elif state == GameState.COMBAT and prompt_active:
@@ -2288,7 +2327,6 @@ func _process(delta: float) -> void:
 				_next_combat_prompt()
 		return
 
-	# Only drain the timer on Level 2+ while no mistake repair is paused!
 	if state == GameState.COMBAT and prompt_active and prompt_clean_try and int(current_spec.get("tier", 0)) >= 1:
 		prompt_timer -= delta
 		timer_bar.value = clampf((prompt_timer / PROMPT_TIME_LIMIT) * 100.0, 0.0, 100.0)
@@ -2335,91 +2373,100 @@ func _run_automated_verification() -> void:
 	assert(int(r_err["new_tier"]) == 1, "Mistake should drop Level 3 -> Level 2 and log confusion")
 	var dir_spec := test_srs.build_direction_prompt_spec(2, 5)
 	assert(str(dir_spec["prompt_type"]) == "DIRECTION" and dir_spec["steps"].size() == 2, "Direction sequence spec should have 2 steps")
-	print("VERIFY_OK: French Target Arcade Maps, Direction Sequences & SRS verified.")
+	var dp_spec := test_srs.build_daily_phrase_prompt_spec(0, 1)
+	assert(str(dp_spec["prompt_type"]) == "DAILY_PHRASE" and str(dp_spec["target_id"]) == "Excusez-moi, l'addition, s'il vous plaît !", "Everyday phrase spec should match Excusez-moi, l'addition, s'il vous plaît !")
+	print("VERIFY_OK: Recognizable 3D Places, French-Speaking Chloé, Everyday Phrases & Direction Pads verified.")
 
-	# 1. Playable 3D Hub Menu in Map 1 (Au Café Parisien) with Chloé Companion & 3D Map Portals
+	# 1. Title Screen in Au Café Parisien: Bistro tables, Haussmann facade, striped awning, Chloé speaking French
 	srs.reset_progress()
-	srs.sector_filter = -1
+	srs.sector_filter = 0
 	_enter_menu()
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/01_menu.png")
 
-	# 2. Map 1 (Au Café Parisien): New Word Spotlight ("la tasse") with café props & Chloé conversational tip
+	# 2. Step 1 in Au Café Parisien: New Word Spotlight ("la tasse") + custom 3D Baguette ("le pain") + Cheese Wheel ("le fromage") on Café Bistro Tables
 	srs.reset_progress()
 	srs.sector_filter = 0
 	_on_start_mission_pressed()
 	_clear_drones()
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	current_spec = srs.build_prompt_spec("tasse")
 	var demo_ids := ["pain", "tasse", "fromage"]
-	var demo_xs := [-4.4, 0.0, 4.4]
+	var demo_xs := [-4.2, 0.0, 4.2]
 	for i in range(3):
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		d.setup(demo_ids[i], Vector3(demo_xs[i], 2.15, -0.5), player.global_position, 0.0, 1.18)
+		d.setup(demo_ids[i], Vector3(demo_xs[i], 1.82, -0.6), player.global_position, 0.0, 1.18)
 		d.set_slot_badge(i + 1)
 		if demo_ids[i] == "tasse":
 			d.show_calibration_card("la tasse", "the cup / mug")
 		active_drones.append(d)
-	_spawn_ground_pickup(Vector3(1.8, 0.85, 3.2))
 	var tasse_item := VocabData.get_by_id("tasse")
-	_chloe_say("New word in Au Café Parisien: « la tasse » (the cup / mug)! %s" % str(tasse_item["tip"]))
+	_chloe_say("« Voici la tasse ! » (the cup / mug) — Phrase : « %s »" % str(tasse_item["phrase_fr"]))
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.0, -0.5))
+	player.look_toward_point(Vector3(0.0, 1.9, -0.6))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/02_calibration_3d.png")
 
-	# 3. Map 4 (La Gare du Nord): Pure Listening Action Wave with incoming Plasma Orbs & Gold Star Pickup
+	# 3. Step 2 in La Gare du Nord (Train Station Platform with parked TGV high-speed train): Spoken Everyday Phrase ("À quelle heure part le train pour Lyon ?")
 	srs.sector_filter = 3
 	_apply_map_theme(3)
+	if _display_tables_root:
+		_display_tables_root.visible = true
 	for vid in ["train", "avion", "voiture", "velo", "valise"]:
 		srs.mark_calibrated(vid)
-		srs.cards[vid]["tier"] = 2
+		srs.cards[vid]["tier"] = 1
 	_clear_drones()
-	_clear_projectiles_and_pickups()
 	current_spec = srs.build_prompt_spec("train")
-	_spawn_vocab_drones(current_spec)
-	for d in active_drones:
-		d.approach_paused = true
-		d._anchor_pos.z = -1.2
-	_spawn_enemy_plasma(Vector3(-1.4, 1.85, 1.2))
-	_spawn_enemy_plasma(Vector3(1.6, 1.80, 0.6))
-	_spawn_ground_pickup(Vector3(-1.5, 0.85, 3.4))
-	_chloe_say("Listen closely in La Gare du Nord! Dodge the plasma orbs and shoot « le train »!")
+	var station_ids := ["valise", "train", "velo"]
+	for i in range(3):
+		var d := TargetDrone.new()
+		drones_root.add_child(d)
+		d.setup(station_ids[i], Vector3(demo_xs[i], 1.82, -0.6), player.global_position, 0.0, 1.16)
+		d.set_slot_badge(i + 1)
+		active_drones.append(d)
+	_chloe_say("« À quelle heure part le train pour Lyon ? » (What time does the train for Lyon leave?)")
 	_refresh_prompt_hud()
 	_update_stats_hud()
-	player.look_toward_point(Vector3(0.0, 2.0, -1.2))
+	player.look_toward_point(Vector3(0.0, 1.9, -0.6))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/03_combat_pure_listening.png")
 
-	# 4. 3D Direction Sequence ("À gauche, puis en haut !") in Map 2 (La Maison)
+	# 4. Step 5 in La Maison (Parisian Apartment with parquet floor, fireplace & bookshelves): Clean non-overlapping 3D Direction Pads ("À gauche, puis en haut !")
 	srs.sector_filter = 1
 	_apply_map_theme(1)
 	_clear_drones()
-	_clear_projectiles_and_pickups()
 	current_spec = srs.build_direction_prompt_spec(2, 5)
 	_spawn_direction_drones(current_spec)
 	_chloe_say(str(current_spec["chloe_tip"]))
 	_refresh_prompt_hud()
 	_update_stats_hud()
 	player.position = Vector3(0.0, 0.30, 6.6)
-	player.look_toward_point(Vector3(0.0, 1.45, 1.8))
+	player.look_toward_point(Vector3(0.0, 1.25, 1.6))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/06_a2_spatial_modifiers.png")
 
-	# 5. In-World 3D Portal Wave Transition unlocking Map 2 (La Maison) with Chloé cheering!
-	_finish_wave()
-	player.position = Vector3(0.0, 0.30, 6.4)
-	player.look_toward_point(Vector3(0.0, 1.9, 0.4))
+	# 5. Step 4 in Au Café Parisien: 3 Parisian Café Chalkboard Signboards ("Excusez-moi, l'addition, s'il vous plaît !")
+	srs.sector_filter = 0
+	_apply_map_theme(0)
+	_clear_drones()
+	current_spec = srs.build_daily_phrase_prompt_spec(0, 1)
+	_spawn_grammar_drones(current_spec)
+	_chloe_say("« En France (%s) : » %s" % [str(current_spec["situation_en"]), str(current_spec["chloe_tip"])])
+	_refresh_prompt_hud()
+	_update_stats_hud()
+	player.position = Vector3(0.0, 0.30, 6.6)
+	player.look_toward_point(Vector3(0.0, 1.95, -0.6))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/07_b1_grammar_breach.png")
 
-	# 6. 3D Practice Gallery in Map 7 (Jardin du Luxembourg)
-	_clear_projectiles_and_pickups()
+	# 6. 3D Practice Gallery in Jardin du Luxembourg (Fountain & Park)
 	feedback_banner.visible = false
 	_on_enter_gallery_pressed()
 	_load_gallery_sector(6)
@@ -2427,15 +2474,15 @@ func _run_automated_verification() -> void:
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/05_gallery_study.png")
 
-	# 7. Interactive [Tab] Word Book (Maps 1–4)
+	# 7. Interactive [Tab] Word & Phrase Book — Words with [♪ Phrase] buttons
 	lexicon_tab = "A1"
 	_toggle_lexicon(true)
 	for i in range(4):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/04_srs_lexicon.png")
 
-	# 8. Interactive [Tab] Word Book (Maps 5–7)
-	lexicon_tab = "A2"
+	# 8. Interactive [Tab] Word & Phrase Book — ★ Phrases (18) Day-to-Day Conversational French Tab
+	lexicon_tab = "PHRASES"
 	_populate_lexicon_grid()
 	for i in range(4):
 		await get_tree().process_frame
