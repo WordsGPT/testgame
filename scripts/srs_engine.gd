@@ -28,6 +28,7 @@ var grammar_cards: Dictionary = {} # gram_id -> Dictionary
 var recent_history: Array[String] = []
 var modifier_cursor: int = 0
 var scenario_cursor: int = 0
+var direction_cursor: int = 0
 
 
 func _init() -> void:
@@ -71,9 +72,11 @@ func _init_default_cards() -> void:
 
 func reset_progress() -> void:
 	global_step = 0
+	sector_filter = -1
 	recent_history.clear()
 	modifier_cursor = 0
 	scenario_cursor = 0
+	direction_cursor = 0
 	_init_default_cards()
 	save_progress()
 
@@ -144,12 +147,9 @@ func get_candidate_pool() -> Array[String]:
 	if sector_filter >= 0 and sector_filter < VocabData.SECTORS.size():
 		return VocabData.get_sector_ids(sector_filter)
 	if sector_filter == -1:
-		# Guided Campaign: includes all words up to and including the active Campaign Stage!
+		# Guided Campaign: focuses on the active Map's 5 words so words always match the Map Stage you're in!
 		var active_sec := get_active_campaign_sector()
-		var pool: Array[String] = []
-		for s_idx in range(active_sec + 1):
-			pool.append_array(VocabData.get_sector_ids(s_idx))
-		return pool
+		return VocabData.get_sector_ids(active_sec)
 	if sector_filter == -2:
 		return VocabData.get_cefr_vocab_ids("A1")
 	if sector_filter == -3:
@@ -458,8 +458,50 @@ func build_grammar_prompt_spec(force_gram_id: String = "") -> Dictionary:
 	}
 
 
-## Master Wave Prompt Router: scales smoothly with the player's actual Stage!
-func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
+## Builds a 3D Directional Movement or Multi-Step Direction Sequence Prompt
+func build_direction_prompt_spec(max_level: int = 1, force_index: int = -1) -> Dictionary:
+	var drill: Dictionary
+	if force_index >= 0 and force_index < VocabData.DIRECTION_DRILLS.size():
+		drill = VocabData.DIRECTION_DRILLS[force_index]
+	else:
+		var candidates: Array[Dictionary] = []
+		for d in VocabData.DIRECTION_DRILLS:
+			if int(d["level"]) == max_level:
+				candidates.append(d)
+		if candidates.is_empty():
+			for d in VocabData.DIRECTION_DRILLS:
+				if int(d["level"]) <= max_level:
+					candidates.append(d)
+		if candidates.is_empty():
+			candidates = VocabData.DIRECTION_DRILLS
+		drill = candidates[direction_cursor % candidates.size()]
+		direction_cursor += 1
+
+	var steps: Array = drill["steps"]
+	var is_seq := steps.size() > 1
+	return {
+		"prompt_type": "DIRECTION",
+		"drill_id": drill["id"],
+		"level": int(drill["level"]),
+		"steps": steps.duplicate(),
+		"target_id": str(steps[0]),
+		"tier": 1 if not is_seq else 2,
+		"speaker": "CHLOÉ",
+		"mode_tag": "3D DIRECTION SEQUENCE" if is_seq else "3D DIRECTION MOVE",
+		"audio_file": drill["audio"],
+		"slow_audio_file": "",
+		"prompt_fr": drill["prompt_fr"],
+		"prompt_en": drill["prompt_en"],
+		"sub_en": drill["prompt_en"],
+		"chloe_tip": drill["chloe_tip"],
+		"show_fr_text": true,
+		"show_en_text": (int(drill["level"]) == 1) or (l1_mode == 1),
+		"required_decoy": "",
+	}
+
+
+## Master Wave Prompt Router: scales smoothly with the player's actual Map & Wave!
+func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dictionary:
 	if sector_filter == -5:
 		return build_modifier_prompt_spec()
 	if sector_filter == -6:
@@ -467,11 +509,19 @@ func build_wave_prompt_spec(prompt_in_wave: int) -> Dictionary:
 	if sector_filter == -7:
 		return build_grammar_prompt_spec()
 
-	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else sector_filter
+	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else clampi(sector_filter, 0, 8)
+	var dir_lvl := clampi(1 + effective_sec + (current_wave - 1), 1, 3)
 
-	# Once the player reaches Stage 3+, include a fun 3D Size/Speed/Position bonus challenge on Shot 6!
-	if effective_sec >= 2 and prompt_in_wave == 6:
-		return build_modifier_prompt_spec()
+	# Shot 3 of every round: Physical 3D Directional Movement (1-step in Wave 1 Map 1, scaling to 2-step & 3-step sequences!)
+	if prompt_in_wave == 3:
+		var step3_lvl := 1 if (effective_sec == 0 and current_wave == 1) else mini(2, dir_lvl)
+		return build_direction_prompt_spec(step3_lvl)
+
+	# Shot 6 (Round Finale): Multi-Step Direction Sequence or 3D Size/Speed/Position Challenge!
+	if prompt_in_wave == 6:
+		if effective_sec >= 1 and (current_wave % 2 == 0):
+			return build_modifier_prompt_spec()
+		return build_direction_prompt_spec(clampi(dir_lvl, 2 if current_wave >= 2 or effective_sec >= 1 else 1, 3))
 
 	var target_id := select_next_target()
 	return build_prompt_spec(target_id)

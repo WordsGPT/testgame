@@ -5,6 +5,7 @@ extends Node
 ## Provides live waveform bar values for the HUD Oscilloscope Visualizer.
 
 var voice_player: AudioStreamPlayer
+var companion_player: AudioStreamPlayer
 var sfx_pool: Array[AudioStreamPlayer] = []
 var stream_cache: Dictionary = {}
 var _wave_phase: float = 0.0
@@ -16,18 +17,22 @@ func _ready() -> void:
 		AudioServer.set("driver/output_latency", 50)
 
 	voice_player = AudioStreamPlayer.new()
-	voice_player.volume_db = 2.0
+	voice_player.volume_db = 4.5
 	add_child(voice_player)
+
+	companion_player = AudioStreamPlayer.new()
+	companion_player.volume_db = 3.5
+	add_child(companion_player)
 
 	for i in range(6):
 		var sp := AudioStreamPlayer.new()
-		sp.volume_db = -3.5
+		sp.volume_db = -16.5
 		add_child(sp)
 		sfx_pool.append(sp)
 
 
 func _process(delta: float) -> void:
-	if voice_player and voice_player.playing:
+	if (voice_player and voice_player.playing) or (companion_player and companion_player.playing):
 		_wave_phase += delta * 18.0
 
 
@@ -42,39 +47,58 @@ func _get_stream(rel_path: String) -> AudioStream:
 	return null
 
 
-func play_voice(filename: String, volume_db_offset: float = 2.0, pitch: float = 1.0) -> void:
+func play_voice(filename: String, volume_db_offset: float = 4.5, pitch: float = 1.0) -> void:
 	if master_muted or filename == "":
 		return
 	var st := _get_stream("res://assets/audio/voice/" + filename)
 	if st:
+		if companion_player and companion_player.playing:
+			companion_player.stop()
 		voice_player.stop()
 		voice_player.stream = st
 		voice_player.pitch_scale = pitch
-		voice_player.volume_db = volume_db_offset
+		voice_player.volume_db = maxf(volume_db_offset, 3.5)
 		voice_player.play()
 
 
-func play_sfx(sfx_name: String, pitch_jitter: float = 0.04, vol_db: float = -3.5) -> void:
+func play_companion(filename: String, volume_db_offset: float = 3.5) -> void:
+	if master_muted or filename == "":
+		return
+	if voice_player and voice_player.playing:
+		return
+	var st := _get_stream("res://assets/audio/voice/" + filename)
+	if st and companion_player:
+		companion_player.stop()
+		companion_player.stream = st
+		companion_player.volume_db = volume_db_offset
+		companion_player.play()
+
+
+func play_sfx(sfx_name: String, pitch_jitter: float = 0.04, vol_db: float = -16.5) -> void:
 	if master_muted:
 		return
 	var st := _get_stream("res://assets/audio/sfx/" + sfx_name + ".ogg")
 	if not st:
 		return
+	# Keep VFX/SFX soft and subtle (-15 dB to -24 dB) so TTS voices are always front and center!
+	var final_db := clampf(vol_db - 13.5, -26.0, -14.5)
+	if is_voice_playing():
+		final_db -= 4.0
 	for sp in sfx_pool:
 		if not sp.playing:
 			sp.stream = st
-			sp.volume_db = vol_db
+			sp.volume_db = final_db
 			sp.pitch_scale = 1.0 + randf_range(-pitch_jitter, pitch_jitter)
 			sp.play()
 			return
 	sfx_pool[0].stream = st
-	sfx_pool[0].volume_db = vol_db
+	sfx_pool[0].volume_db = final_db
 	sfx_pool[0].pitch_scale = 1.0
 	sfx_pool[0].play()
 
 
 func is_voice_playing() -> bool:
-	return voice_player != null and voice_player.playing
+	return (voice_player != null and voice_player.playing) or (companion_player != null and companion_player.playing)
 
 
 ## Returns 12 normalized [0.08..1.0] bar heights for the HUD Radio Oscilloscope
