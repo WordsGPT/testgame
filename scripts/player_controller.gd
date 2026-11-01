@@ -10,13 +10,17 @@ extends CharacterBody3D
 
 signal fired_at_entity(entity: Node, hit_pos: Vector3)
 signal hovered_entity_changed(entity: Node)
+signal dashed()
 
-const WALK_SPEED := 7.6
-const SPRINT_SPEED := 11.2
-const JUMP_VELOCITY := 5.6
-const GRAVITY := 15.5
+const WALK_SPEED := 9.2
+const SPRINT_SPEED := 13.5
+const DASH_SPEED := 23.5
+const DASH_DURATION := 0.18
+const DASH_COOLDOWN := 0.72
+const JUMP_VELOCITY := 6.8
+const GRAVITY := 16.5
 const MOUSE_SENS := 0.0023
-const KEY_TURN_SPEED := 2.15
+const KEY_TURN_SPEED := 2.25
 const MAX_RAY_DIST := 70.0
 
 var controls_enabled: bool = false
@@ -31,6 +35,10 @@ var _pitch: float = 0.0
 var _sway_time: float = 0.0
 var _recoil_offset: float = 0.0
 var _fire_cooldown: float = 0.0
+var _dash_timer: float = 0.0
+var _dash_cooldown: float = 0.0
+var _dash_dir: Vector3 = Vector3.ZERO
+var _strafe_tilt: float = 0.0
 var _last_hovered: Node = null
 var _has_free_mouse_pos: bool = false
 var _free_mouse_pos: Vector2 = Vector2.ZERO
@@ -119,14 +127,39 @@ func _unhandled_input(event: InputEvent) -> void:
 			try_fire()
 		elif event.physical_keycode == KEY_V:
 			is_aiming = not is_aiming
+		elif event.physical_keycode == KEY_SHIFT and _dash_cooldown <= 0.0:
+			_trigger_dash()
+
+
+func _trigger_dash() -> void:
+	var in_vec := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+		in_vec.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		in_vec.y += 1.0
+	if Input.is_physical_key_pressed(KEY_A):
+		in_vec.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_D):
+		in_vec.x += 1.0
+	if in_vec.length_squared() < 0.01:
+		in_vec = Vector2(0.0, -1.0)
+	else:
+		in_vec = in_vec.normalized()
+	_dash_dir = (transform.basis * Vector3(in_vec.x, 0.0, in_vec.y)).normalized()
+	_dash_timer = DASH_DURATION
+	_dash_cooldown = DASH_COOLDOWN
+	dashed.emit()
 
 
 func _physics_process(delta: float) -> void:
 	_fire_cooldown = maxf(0.0, _fire_cooldown - delta)
+	_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
+	_dash_timer = maxf(0.0, _dash_timer - delta)
 
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
+	var target_tilt := 0.0
 	if controls_enabled:
 		if Input.is_physical_key_pressed(KEY_SPACE) and is_on_floor():
 			velocity.y = JUMP_VELOCITY
@@ -141,6 +174,8 @@ func _physics_process(delta: float) -> void:
 		if Input.is_physical_key_pressed(KEY_D):
 			in_vec.x += 1.0
 
+		target_tilt = -in_vec.x * 0.038
+
 		# Arrow keys Left/Right allow smooth camera turning on laptops without interfering with E/Q hotkeys
 		var turn_axis := 0.0
 		if Input.is_physical_key_pressed(KEY_LEFT):
@@ -152,21 +187,29 @@ func _physics_process(delta: float) -> void:
 		if in_vec.length_squared() > 1.0:
 			in_vec = in_vec.normalized()
 
-		var spd := SPRINT_SPEED if Input.is_physical_key_pressed(KEY_SHIFT) and not is_aiming else WALK_SPEED
-		if is_aiming:
-			spd *= 0.68
-
-		var move_dir := (transform.basis * Vector3(in_vec.x, 0.0, in_vec.y))
-		if move_dir.length_squared() > 0.001:
-			velocity.x = move_dir.x * spd
-			velocity.z = move_dir.z * spd
-			_sway_time += delta * (10.5 if spd > WALK_SPEED else 7.5)
+		if _dash_timer > 0.0:
+			velocity.x = _dash_dir.x * DASH_SPEED
+			velocity.z = _dash_dir.z * DASH_SPEED
 		else:
-			velocity.x = move_toward(velocity.x, 0.0, spd * 10.0 * delta)
-			velocity.z = move_toward(velocity.z, 0.0, spd * 10.0 * delta)
+			var spd := SPRINT_SPEED if Input.is_physical_key_pressed(KEY_SHIFT) and not is_aiming else WALK_SPEED
+			if is_aiming:
+				spd *= 0.68
+
+			var move_dir := (transform.basis * Vector3(in_vec.x, 0.0, in_vec.y))
+			if move_dir.length_squared() > 0.001:
+				velocity.x = move_dir.x * spd
+				velocity.z = move_dir.z * spd
+				_sway_time += delta * (11.5 if spd > WALK_SPEED else 8.5)
+			else:
+				velocity.x = move_toward(velocity.x, 0.0, spd * 11.0 * delta)
+				velocity.z = move_toward(velocity.z, 0.0, spd * 11.0 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, 25.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 25.0 * delta)
+
+	_strafe_tilt = lerpf(_strafe_tilt, target_tilt, clampf(delta * 12.0, 0.0, 1.0))
+	if head:
+		head.rotation.z = _strafe_tilt
 
 	move_and_slide()
 
@@ -174,8 +217,8 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < -5.0:
 		global_position = Vector3(0, 0.5, 6.0)
 
-	# Smooth ADS FOV & weapon procedural sway + recoil recovery
-	var target_fov := 46.0 if (is_aiming and controls_enabled) else 74.0
+	# Smooth ADS / Dash FOV & weapon procedural sway + recoil recovery
+	var target_fov := 46.0 if (is_aiming and controls_enabled) else (83.0 if _dash_timer > 0.0 else 75.0)
 	camera.fov = lerpf(camera.fov, target_fov, clampf(delta * 12.0, 0.0, 1.0))
 
 	_recoil_offset = move_toward(_recoil_offset, 0.0, delta * 0.65)

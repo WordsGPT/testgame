@@ -6,6 +6,7 @@ extends Area3D
 ## lane-disciplined hover motion (no overlapping targets), and juicy arcade destruction feedback.
 
 signal reached_defense_line(drone: TargetDrone)
+signal fired_plasma(origin_pos: Vector3)
 
 var vocab_id: String = ""
 var drone_tag: String = "" # Matches against target_tag (defaults to vocab_id)
@@ -14,19 +15,23 @@ var custom_wrong_label: String = ""
 var custom_ok_label: String = ""
 var is_calibrated_target: bool = false
 var is_grammar_crystal: bool = false
+var is_portal_crystal: bool = false
 var is_destroyed: bool = false
 var approach_speed: float = 0.0
 var defense_z: float = 3.2
 var approach_paused: bool = false
+var can_fire_plasma: bool = false
 var slot_number: int = 0
 
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _orbit_phase: float = 0.0
 var _orbit_speed: float = 0.65
-var _strafe_amp: float = 0.35
+var _strafe_amp: float = 0.55
+var _depth_amp: float = 0.35
 var _strafe_dir: Vector3 = Vector3.RIGHT
 var _bob_phase: float = 0.0
 var _bob_amp: float = 0.08
+var _fire_timer: float = 2.8
 
 var _visual_root: Node3D
 var _vocab_holder: Node3D
@@ -53,9 +58,11 @@ func setup(
 	_orbit_phase = randf() * TAU
 	_bob_phase = randf() * TAU
 	# Keep motion smooth and strictly inside each drone's lane so targets never overlap!
-	_orbit_speed = randf_range(0.65, 0.90) * move_scale
-	_strafe_amp = clampf(0.32 * move_scale, 0.0, 0.95)
-	_bob_amp = 0.0 if move_scale <= 0.01 else 0.08
+	_orbit_speed = randf_range(0.75, 1.05) * move_scale
+	_strafe_amp = clampf(0.55 * move_scale, 0.0, 1.15)
+	_depth_amp = clampf(0.32 * move_scale, 0.0, 0.70)
+	_bob_amp = 0.0 if move_scale <= 0.01 else 0.10
+	_fire_timer = randf_range(1.8, 3.8)
 
 	var to_center := (arena_center - spawn_pos)
 	to_center.y = 0.0
@@ -172,6 +179,37 @@ func configure_as_grammar_crystal(option_text: String, index_num: int) -> void:
 	set_beacon(true, Color(0.62, 0.38, 1.0))
 
 
+func configure_as_portal_crystal(title_text: String, subtitle_text: String, ring_col: Color = Color(1.0, 0.84, 0.22)) -> void:
+	is_portal_crystal = true
+	is_calibrated_target = true
+	_badge_label.text = title_text
+	_badge_label.font_size = 54
+	_badge_label.modulate = Color(1.0, 0.95, 0.55)
+	_badge_label.visible = true
+	_badge_timer = 0.0
+	if _concept_label:
+		_concept_label.text = subtitle_text
+		_concept_label.font_size = 34
+		_concept_label.modulate = Color(0.95, 0.98, 1.0)
+		_concept_label.visible = true
+	set_beacon(true, ring_col)
+	# Add a tall glowing vertical portal ring around the target!
+	var gate_mesh := MeshInstance3D.new()
+	var gt := TorusMesh.new()
+	gt.inner_radius = 1.45
+	gt.outer_radius = 1.62
+	gt.rings = 36
+	gt.ring_segments = 16
+	gate_mesh.mesh = gt
+	gate_mesh.rotation_degrees = Vector3(90, 0, 0)
+	gate_mesh.position = Vector3(0, 0.25, 0)
+	var gmat := StandardMaterial3D.new()
+	gmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gmat.albedo_color = ring_col
+	gate_mesh.material_override = gmat
+	_visual_root.add_child(gate_mesh)
+
+
 func _physics_process(delta: float) -> void:
 	if is_destroyed:
 		return
@@ -184,7 +222,14 @@ func _physics_process(delta: float) -> void:
 			_anchor_pos.z = -3.8
 			reached_defense_line.emit(self)
 
+	if can_fire_plasma and not approach_paused:
+		_fire_timer -= delta
+		if _fire_timer <= 0.0:
+			_fire_timer = randf_range(2.6, 4.4)
+			fired_plasma.emit(global_position + Vector3(0, 0.15, 0))
+
 	var offset := _strafe_dir * (sin(_orbit_phase) * _strafe_amp)
+	offset.z += cos(_orbit_phase * 0.75) * _depth_amp
 	offset.y = sin(_bob_phase) * _bob_amp
 	global_position = _anchor_pos + offset
 

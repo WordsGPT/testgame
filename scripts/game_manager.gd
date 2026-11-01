@@ -32,9 +32,16 @@ var player: PlayerController
 var world_root: Node3D
 var drones_root: Node3D
 var pedestals_root: Node3D
+var projectiles_root: Node3D
+var pickups_root: Node3D
 var gallery_sign: Label3D
 var pedestals: Array[PedestalStation] = []
 var active_drones: Array[TargetDrone] = []
+var _projectiles: Array[Dictionary] = []
+var _pickups: Array[Dictionary] = []
+var _damage_flash: ColorRect
+var _damage_flash_timer: float = 0.0
+var _portal_cooldown: float = 0.0
 
 # Wave & Prompt runtime state
 var wave_number: int = 1
@@ -61,6 +68,7 @@ var lexicon_tab: String = "ALL"
 # UI Nodes
 var ui_layer: CanvasLayer
 var hud_root: Control
+var radio_panel: PanelContainer
 var crosshair_reticle: CrosshairReticle
 var _reticle_col: Color = Color(0.15, 0.95, 0.75, 0.95)
 var hover_info_lbl: Label
@@ -112,6 +120,14 @@ func _ready() -> void:
 	pedestals_root.name = "PedestalsRoot"
 	world_root.add_child(pedestals_root)
 
+	projectiles_root = Node3D.new()
+	projectiles_root.name = "ProjectilesRoot"
+	world_root.add_child(projectiles_root)
+
+	pickups_root = Node3D.new()
+	pickups_root.name = "PickupsRoot"
+	world_root.add_child(pickups_root)
+
 	_build_environment_and_lights()
 	_build_arena_geometry()
 	_spawn_player()
@@ -154,6 +170,7 @@ func _build_environment_and_lights() -> void:
 	sun.light_energy = 0.78
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 55.0
+	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
 	world_root.add_child(sun)
 
@@ -161,6 +178,7 @@ func _build_environment_and_lights() -> void:
 	fill.light_color = Color(0.96, 0.86, 0.72)
 	fill.light_energy = 0.24
 	fill.shadow_enabled = false
+	fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
 	fill.rotation_degrees = Vector3(-35.0, 150.0, 0.0)
 	world_root.add_child(fill)
 
@@ -249,14 +267,24 @@ func _build_arena_geometry() -> void:
 	_add_static_box(arena, Vector3(64.0, 0.5, 64.0), Vector3(0, -0.28, 0), Vector3.ZERO, grass_mat, true)
 	_add_static_box(arena, Vector3(26.0, 0.10, 28.0), Vector3(0, -0.02, -1.0), Vector3.ZERO, stone_court, true)
 
-	# Alternating warm travertine lane strips (subtle natural stone, zero neon grid!)
+	# Alternating warm travertine lane strips
 	for lx in [-6.0, -2.0, 2.0, 6.0]:
-		_add_static_box(arena, Vector3(2.8, 0.03, 14.0), Vector3(lx, 0.02, -1.5), Vector3.ZERO, stone_tile, false)
+		_add_static_box(arena, Vector3(2.8, 0.03, 16.0), Vector3(lx, 0.02, -0.5), Vector3.ZERO, stone_tile, false)
 
-	# Player timber shooting deck & warm terracotta defense barricade line at z = 3.6
-	_add_static_box(arena, Vector3(16.0, 0.18, 5.5), Vector3(0, 0.09, 6.8), Vector3.ZERO, timber_mat, true)
-	_add_static_box(arena, Vector3(15.2, 0.52, 0.38), Vector3(0, 0.26, 3.6), Vector3.ZERO, wall_cream, false)
-	_add_static_box(arena, Vector3(15.4, 0.12, 0.46), Vector3(0, 0.56, 3.6), Vector3.ZERO, terra_mat, false)
+	# Open 3D Courtyard with Tactical Cover Pillars & Jump Plinths (WASD dodge, flank & high-ground!)
+	# 1. Central low stone jump-pad plinth (jump onto it with [Space] for high-ground shots!)
+	_add_static_box(arena, Vector3(2.8, 0.42, 2.4), Vector3(0.0, 0.21, 2.2), Vector3.ZERO, wall_cream, true)
+	_add_static_box(arena, Vector3(3.0, 0.08, 2.6), Vector3(0.0, 0.44, 2.2), Vector3.ZERO, terra_mat, false)
+
+	# 2. Left & Right Mid-Court Tactical Cover Pillars (strafe behind these with A/D to block incoming plasma orbs!)
+	for side_x in [-4.5, 4.5]:
+		_add_static_box(arena, Vector3(1.35, 1.45, 0.85), Vector3(side_x, 0.72, 2.8), Vector3.ZERO, wall_cream, true)
+		_add_static_box(arena, Vector3(1.50, 0.14, 0.98), Vector3(side_x, 1.50, 2.8), Vector3.ZERO, terra_mat, false)
+
+	# 3. Forward Flanking Step Blocks (jump & dash across the courtyard to collect Gold Stars!)
+	for fwd_x in [-6.8, 6.8]:
+		_add_static_box(arena, Vector3(1.8, 0.55, 1.8), Vector3(fwd_x, 0.27, -0.4), Vector3.ZERO, timber_mat, true)
+		_add_static_box(arena, Vector3(1.95, 0.10, 1.95), Vector3(fwd_x, 0.58, -0.4), Vector3.ZERO, terra_mat, false)
 
 	# Practice Gallery terrace at north end
 	_add_static_box(arena, Vector3(20.0, 0.20, 6.0), Vector3(0, 0.10, -13.5), Vector3.ZERO, stone_tile, true)
@@ -369,6 +397,13 @@ func _build_ui() -> void:
 	hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui_layer.add_child(hud_root)
 
+	# Subtle screen-edge flash when hit by an enemy plasma orb
+	_damage_flash = ColorRect.new()
+	_damage_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.color = Color(0.95, 0.18, 0.12, 0.0)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(_damage_flash)
+
 	# 1. Center Tactical Reticle & Hover Readout
 	crosshair_reticle = CrosshairReticle.new()
 	crosshair_reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -382,79 +417,59 @@ func _build_ui() -> void:
 	hover_info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hover_info_lbl.add_theme_font_size_override("font_size", 16)
 	hover_info_lbl.add_theme_color_override("font_color", Color(1.0, 0.94, 0.52))
-	hover_info_lbl.add_theme_color_override("font_outline_color", Color(0.14, 0.08, 0.04))
+	hover_info_lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.05, 0.08, 0.92))
 	hover_info_lbl.add_theme_constant_override("outline_size", 6)
 	hover_info_lbl.set_anchors_preset(Control.PRESET_CENTER)
 	hover_info_lbl.position = Vector2(-280, -212)
 	hover_info_lbl.size = Vector2(560, 32)
 	hud_root.add_child(hover_info_lbl)
 
-	# 2. Top-Center Compact Arcade Prompt Banner (Warm Espresso & Gold)
-	var radio_panel := PanelContainer.new()
-	radio_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.15, 0.11, 0.08, 0.94), Color(0.90, 0.68, 0.28, 0.96), 14, 2)
-	)
+	# 2. Sleek Translucent Top-Center Callout Pill (Zero giant boxes, zero wall of text!)
+	radio_panel = PanelContainer.new()
+	var pill_style := _make_panel_style(Color(0.06, 0.08, 0.11, 0.62), Color(1.0, 0.88, 0.45, 0.35), 28, 1)
+	pill_style.content_margin_left = 22
+	pill_style.content_margin_right = 22
+	pill_style.content_margin_top = 8
+	pill_style.content_margin_bottom = 8
+	radio_panel.add_theme_stylebox_override("panel", pill_style)
 	radio_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	radio_panel.position = Vector2(-360, 10)
-	radio_panel.custom_minimum_size = Vector2(720, 106)
+	radio_panel.position = Vector2(-280, 12)
+	radio_panel.custom_minimum_size = Vector2(560, 48)
 	radio_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(radio_panel)
 
 	var rv := VBoxContainer.new()
-	rv.add_theme_constant_override("separation", 4)
+	rv.add_theme_constant_override("separation", 3)
 	radio_panel.add_child(rv)
 
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 10)
-	rv.add_child(top_row)
-
+	# Keep speaker_lbl & mode_tag_lbl as internal state holders (not cluttering the pill)
 	speaker_lbl = Label.new()
-	speaker_lbl.text = "♪ FRENCH AUDIO"
-	speaker_lbl.add_theme_font_size_override("font_size", 13)
-	speaker_lbl.add_theme_color_override("font_color", Color(0.98, 0.82, 0.42))
-	top_row.add_child(speaker_lbl)
-
-	var wave_box := HBoxContainer.new()
-	wave_box.add_theme_constant_override("separation", 3)
-	wave_box.custom_minimum_size = Vector2(92, 18)
-	top_row.add_child(wave_box)
-	wave_bars.clear()
-	for i in range(12):
-		var bar_wrap := Control.new()
-		bar_wrap.custom_minimum_size = Vector2(5, 18)
-		wave_box.add_child(bar_wrap)
-		var bar := ColorRect.new()
-		bar.color = Color(0.98, 0.78, 0.28)
-		bar.position = Vector2(0, 7)
-		bar.size = Vector2(5, 4)
-		bar_wrap.add_child(bar)
-		wave_bars.append(bar)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(spacer)
+	speaker_lbl.visible = false
+	rv.add_child(speaker_lbl)
 
 	mode_tag_lbl = Label.new()
-	mode_tag_lbl.text = "STAGE 1 • LEVEL 1: NEW WORD"
-	mode_tag_lbl.add_theme_font_size_override("font_size", 13)
-	mode_tag_lbl.add_theme_color_override("font_color", Color(0.68, 0.96, 0.62))
-	top_row.add_child(mode_tag_lbl)
+	mode_tag_lbl.visible = false
+	rv.add_child(mode_tag_lbl)
+
+	wave_bars.clear()
 
 	prompt_main_lbl = Label.new()
 	prompt_main_lbl.text = "Ready"
 	prompt_main_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_main_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_main_lbl.add_theme_font_size_override("font_size", 24)
-	prompt_main_lbl.add_theme_color_override("font_color", Color(1.0, 0.97, 0.90))
+	prompt_main_lbl.add_theme_font_size_override("font_size", 22)
+	prompt_main_lbl.add_theme_color_override("font_color", Color(1.0, 0.98, 0.92))
+	prompt_main_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
+	prompt_main_lbl.add_theme_constant_override("outline_size", 6)
 	rv.add_child(prompt_main_lbl)
 
 	prompt_sub_lbl = Label.new()
 	prompt_sub_lbl.text = ""
+	prompt_sub_lbl.visible = false
 	prompt_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_sub_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_sub_lbl.add_theme_font_size_override("font_size", 14)
-	prompt_sub_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.65))
+	prompt_sub_lbl.add_theme_font_size_override("font_size", 13)
+	prompt_sub_lbl.add_theme_color_override("font_color", Color(0.98, 0.88, 0.58))
 	rv.add_child(prompt_sub_lbl)
 
 	timer_bar = ProgressBar.new()
@@ -462,22 +477,26 @@ func _build_ui() -> void:
 	timer_bar.min_value = 0.0
 	timer_bar.max_value = 100.0
 	timer_bar.value = 100.0
-	timer_bar.custom_minimum_size = Vector2(0, 7)
+	timer_bar.custom_minimum_size = Vector2(0, 4)
+	var tb_bg := StyleBoxFlat.new()
+	tb_bg.bg_color = Color(1.0, 1.0, 1.0, 0.12)
+	tb_bg.set_corner_radius_all(2)
+	timer_bar.add_theme_stylebox_override("background", tb_bg)
 	var tb_fill := StyleBoxFlat.new()
-	tb_fill.bg_color = Color(0.95, 0.72, 0.24)
-	tb_fill.set_corner_radius_all(3)
+	tb_fill.bg_color = Color(1.0, 0.80, 0.24)
+	tb_fill.set_corner_radius_all(2)
 	timer_bar.add_theme_stylebox_override("fill", tb_fill)
 	rv.add_child(timer_bar)
 
-	# 3. Feedback Banner (Only shown when paused on a mistake so text never flies by unread!)
+	# 3. Compact Mistake Callout Pill (Only shown when paused on a mistake)
 	feedback_banner = PanelContainer.new()
 	feedback_banner.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.20, 0.09, 0.07, 0.96), Color(0.96, 0.76, 0.25, 0.96), 10, 2)
+		_make_panel_style(Color(0.08, 0.06, 0.06, 0.78), Color(1.0, 0.78, 0.24, 0.85), 20, 1)
 	)
 	feedback_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	feedback_banner.position = Vector2(-360, 124)
-	feedback_banner.custom_minimum_size = Vector2(720, 40)
+	feedback_banner.position = Vector2(-270, 74)
+	feedback_banner.custom_minimum_size = Vector2(540, 34)
 	feedback_banner.visible = false
 	feedback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(feedback_banner)
@@ -485,17 +504,16 @@ func _build_ui() -> void:
 	feedback_lbl = Label.new()
 	feedback_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	feedback_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	feedback_lbl.add_theme_font_size_override("font_size", 15)
+	feedback_lbl.add_theme_font_size_override("font_size", 14)
+	feedback_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.06, 0.95))
+	feedback_lbl.add_theme_constant_override("outline_size", 4)
 	feedback_banner.add_child(feedback_lbl)
 
-	# 4. Top-Left Score, Combo & Defense Barricade Hearts
+	# 4. Borderless Floating Top-Left Status (Zero background box!)
 	var stats_panel := PanelContainer.new()
-	stats_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.15, 0.11, 0.08, 0.92), Color(0.86, 0.64, 0.26, 0.90), 12, 2)
-	)
-	stats_panel.position = Vector2(14, 10)
-	stats_panel.custom_minimum_size = Vector2(215, 104)
+	stats_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	stats_panel.position = Vector2(20, 14)
+	stats_panel.custom_minimum_size = Vector2(220, 84)
 	stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(stats_panel)
 
@@ -504,51 +522,52 @@ func _build_ui() -> void:
 	stats_panel.add_child(sv)
 
 	wave_lbl = Label.new()
-	wave_lbl.text = "ROUND 1  •  TARGET 1/6"
+	wave_lbl.text = "WAVE 1  •  1/6"
 	wave_lbl.add_theme_font_size_override("font_size", 14)
-	wave_lbl.add_theme_color_override("font_color", Color(0.98, 0.90, 0.72))
+	wave_lbl.add_theme_color_override("font_color", Color(0.96, 0.96, 0.98))
+	wave_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.92))
+	wave_lbl.add_theme_constant_override("outline_size", 5)
 	sv.add_child(wave_lbl)
 
 	score_lbl = Label.new()
-	score_lbl.text = "SCORE: 0  (STREAK x1)"
-	score_lbl.add_theme_font_size_override("font_size", 16)
-	score_lbl.add_theme_color_override("font_color", Color(1.0, 0.84, 0.28))
+	score_lbl.text = "★ 0   STREAK x1"
+	score_lbl.add_theme_font_size_override("font_size", 18)
+	score_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.28))
+	score_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
+	score_lbl.add_theme_constant_override("outline_size", 6)
 	sv.add_child(score_lbl)
-
-	var sh_lbl := Label.new()
-	sh_lbl.text = "BARRICADE HEALTH"
-	sh_lbl.add_theme_font_size_override("font_size", 11)
-	sh_lbl.add_theme_color_override("font_color", Color(0.92, 0.82, 0.68))
-	sv.add_child(sh_lbl)
 
 	shield_bar = ProgressBar.new()
 	shield_bar.show_percentage = false
 	shield_bar.max_value = 100.0
 	shield_bar.value = 100.0
-	shield_bar.custom_minimum_size = Vector2(0, 10)
+	shield_bar.custom_minimum_size = Vector2(168, 8)
+	var sb_bg := StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0.05, 0.07, 0.10, 0.55)
+	sb_bg.set_corner_radius_all(4)
+	shield_bar.add_theme_stylebox_override("background", sb_bg)
 	var sb_fill := StyleBoxFlat.new()
-	sb_fill.bg_color = Color(0.32, 0.88, 0.46)
+	sb_fill.bg_color = Color(0.28, 0.94, 0.52)
 	sb_fill.set_corner_radius_all(4)
 	shield_bar.add_theme_stylebox_override("fill", sb_fill)
 	sv.add_child(shield_bar)
 
-	# 5. Bottom Compact Hotkeys Pill
+	# 5. Borderless Bottom Controls Readout (Zero background box!)
 	var bot_panel := PanelContainer.new()
-	bot_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.14, 0.10, 0.07, 0.90), Color(0.76, 0.56, 0.24, 0.80), 10, 1)
-	)
+	bot_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	bot_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bot_panel.position = Vector2(-460, -44)
-	bot_panel.custom_minimum_size = Vector2(920, 34)
+	bot_panel.position = Vector2(-460, -34)
+	bot_panel.custom_minimum_size = Vector2(920, 26)
 	bot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(bot_panel)
 
 	hotkeys_lbl = Label.new()
-	hotkeys_lbl.text = "[Click] or [1-4] Shoot   •   [WASD] Move   •   [E] Replay Audio   •   [H] Hint   •   [Tab] Word Book   •   [Esc] Menu"
+	hotkeys_lbl.text = "[WASD] Move & Dodge   •   [Shift] Dash   •   [Space] Jump   •   [Click] Shoot   •   [E] Replay   •   [Tab] Word Book"
 	hotkeys_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hotkeys_lbl.add_theme_font_size_override("font_size", 13)
-	hotkeys_lbl.add_theme_color_override("font_color", Color(0.98, 0.93, 0.82))
+	hotkeys_lbl.add_theme_color_override("font_color", Color(0.98, 0.98, 0.98, 0.88))
+	hotkeys_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.92))
+	hotkeys_lbl.add_theme_constant_override("outline_size", 5)
 	bot_panel.add_child(hotkeys_lbl)
 
 	_build_menu_overlay()
@@ -557,136 +576,53 @@ func _build_ui() -> void:
 
 
 func _build_menu_overlay() -> void:
+	# Playable 3D Hub Header — no giant center box blocking the 3D portals!
 	menu_panel = PanelContainer.new()
-	menu_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.15, 0.11, 0.08, 0.96), Color(0.92, 0.70, 0.28, 0.98), 18, 3)
-	)
-	menu_panel.set_anchors_preset(Control.PRESET_CENTER)
-	menu_panel.position = Vector2(-280, -185)
-	menu_panel.custom_minimum_size = Vector2(560, 370)
+	menu_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	menu_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	menu_panel.position = Vector2(-340, 12)
+	menu_panel.custom_minimum_size = Vector2(680, 96)
+	menu_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui_layer.add_child(menu_panel)
 
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 12)
+	vb.add_theme_constant_override("separation", 4)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_panel.add_child(vb)
 
 	var title := Label.new()
 	title.text = "FRANC-TIREUR"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 34)
-	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36))
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.36))
+	title.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
+	title.add_theme_constant_override("outline_size", 8)
 	vb.add_child(title)
-
-	var subtitle := Label.new()
-	subtitle.text = "French Target Arcade  •  Stop the targets before they reach your barricade!"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 14)
-	subtitle.add_theme_color_override("font_color", Color(0.96, 0.90, 0.78))
-	vb.add_child(subtitle)
 
 	menu_stats_lbl = Label.new()
 	menu_stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	menu_stats_lbl.add_theme_font_size_override("font_size", 15)
-	menu_stats_lbl.add_theme_color_override("font_color", Color(0.52, 0.96, 0.62))
+	menu_stats_lbl.add_theme_color_override("font_color", Color(0.98, 0.98, 0.98))
+	menu_stats_lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.08, 0.95))
+	menu_stats_lbl.add_theme_constant_override("outline_size", 6)
 	vb.add_child(menu_stats_lbl)
 
-	var start_btn := Button.new()
-	start_btn.text = "▶ PLAY STAGE 1"
-	start_btn.custom_minimum_size = Vector2(0, 56)
-	start_btn.add_theme_font_size_override("font_size", 20)
-	start_btn.pressed.connect(_on_start_mission_pressed)
-	vb.add_child(start_btn)
-
 	sector_btn = Button.new()
-	sector_btn.custom_minimum_size = Vector2(0, 40)
-	sector_btn.add_theme_font_size_override("font_size", 14)
-	sector_btn.pressed.connect(_on_cycle_sector)
+	sector_btn.visible = false
 	vb.add_child(sector_btn)
 
-	# Keep l1_btn hidden or compact in advanced options so menu stays ultra-clean
 	l1_btn = Button.new()
 	l1_btn.visible = false
 	vb.add_child(l1_btn)
 
-	var bot_row := HBoxContainer.new()
-	bot_row.add_theme_constant_override("separation", 10)
-	vb.add_child(bot_row)
-
-	var lex_btn := Button.new()
-	lex_btn.text = "Word Book (45 Words) [Tab]"
-	lex_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lex_btn.custom_minimum_size = Vector2(0, 40)
-	lex_btn.add_theme_font_size_override("font_size", 13)
-	lex_btn.pressed.connect(func(): _toggle_lexicon(true))
-	bot_row.add_child(lex_btn)
-
-	var gal_btn := Button.new()
-	gal_btn.text = "Practice Range [G]"
-	gal_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gal_btn.custom_minimum_size = Vector2(0, 40)
-	gal_btn.add_theme_font_size_override("font_size", 13)
-	gal_btn.pressed.connect(_on_enter_gallery_pressed)
-	bot_row.add_child(gal_btn)
-
-	var rst_btn := Button.new()
-	rst_btn.text = "↺ Reset"
-	rst_btn.custom_minimum_size = Vector2(90, 40)
-	rst_btn.add_theme_font_size_override("font_size", 13)
-	rst_btn.pressed.connect(func():
-		audio.play_sfx("click")
-		srs.reset_progress()
-		_refresh_menu_labels()
-	)
-	bot_row.add_child(rst_btn)
-
 
 func _build_summary_overlay() -> void:
+	# Kept hidden — wave transitions happen 100% physically in 3D via the Golden Portal Gate!
 	summary_panel = PanelContainer.new()
-	summary_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.15, 0.11, 0.08, 0.97), Color(0.45, 0.92, 0.52, 0.96), 16, 2)
-	)
-	summary_panel.set_anchors_preset(Control.PRESET_CENTER)
-	summary_panel.position = Vector2(-260, -170)
-	summary_panel.custom_minimum_size = Vector2(520, 340)
 	summary_panel.visible = false
 	ui_layer.add_child(summary_panel)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 14)
-	summary_panel.add_child(vb)
-
-	var hd := Label.new()
-	hd.text = "✓ ROUND COMPLETE!"
-	hd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hd.add_theme_font_size_override("font_size", 26)
-	hd.add_theme_color_override("font_color", Color(0.52, 0.98, 0.62))
-	vb.add_child(hd)
-
 	summary_lbl = Label.new()
-	summary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	summary_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary_lbl.add_theme_font_size_override("font_size", 16)
-	summary_lbl.add_theme_color_override("font_color", Color(0.98, 0.94, 0.84))
-	vb.add_child(summary_lbl)
-
-	var next_btn := Button.new()
-	next_btn.text = "▶ NEXT ROUND  [Press Space or Click]"
-	next_btn.custom_minimum_size = Vector2(0, 52)
-	next_btn.add_theme_font_size_override("font_size", 18)
-	next_btn.pressed.connect(_continue_to_next_round)
-	vb.add_child(next_btn)
-
-	var menu_b := Button.new()
-	menu_b.text = "Back to Menu [Esc]"
-	menu_b.custom_minimum_size = Vector2(0, 38)
-	menu_b.pressed.connect(func():
-		audio.play_sfx("click")
-		summary_panel.visible = false
-		_enter_menu()
-	)
-	vb.add_child(menu_b)
+	summary_panel.add_child(summary_lbl)
 
 
 func _continue_to_next_round() -> void:
@@ -696,6 +632,9 @@ func _continue_to_next_round() -> void:
 	wave_number += 1
 	player.visible = true
 	player.camera.current = true
+	if player.position.z < 3.0:
+		player.position = Vector3(0.0, 0.30, 6.2)
+		player.look_toward_point(Vector3(0.0, 2.0, -1.0))
 	player.controls_enabled = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_begin_wave()
@@ -705,7 +644,7 @@ func _build_lexicon_overlay() -> void:
 	lexicon_panel = PanelContainer.new()
 	lexicon_panel.add_theme_stylebox_override(
 		"panel",
-		_make_panel_style(Color(0.14, 0.10, 0.07, 0.98), Color(0.90, 0.68, 0.28, 0.96), 14, 2)
+		_make_panel_style(Color(0.06, 0.08, 0.12, 0.90), Color(1.0, 0.84, 0.35, 0.55), 16, 1)
 	)
 	lexicon_panel.position = Vector2(50, 40)
 	lexicon_panel.size = Vector2(1180, 640)
@@ -790,7 +729,7 @@ func _populate_lexicon_grid() -> void:
 		card.custom_minimum_size = Vector2(228, 102)
 		card.add_theme_stylebox_override(
 			"panel",
-			_make_panel_style(Color(0.20, 0.15, 0.11, 0.96), tier_cols[t_idx], 8, 2)
+			_make_panel_style(Color(0.11, 0.14, 0.20, 0.88), tier_cols[t_idx], 10, 1)
 		)
 		lexicon_grid.add_child(card)
 
@@ -848,12 +787,16 @@ func _toggle_lexicon(force_state: Variant = null) -> void:
 		player.controls_enabled = false
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
-		drones_root.visible = (state in [GameState.CALIBRATION, GameState.COMBAT])
-		pedestals_root.visible = (state in [GameState.MENU, GameState.GALLERY])
+		drones_root.visible = true
+		pedestals_root.visible = (state == GameState.GALLERY)
 		if state == GameState.MENU:
 			menu_panel.visible = true
+			hud_root.visible = true
+			player.controls_enabled = true
 		elif state == GameState.WAVE_SUMMARY:
-			summary_panel.visible = true
+			hud_root.visible = true
+			player.controls_enabled = true
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif state in [GameState.CALIBRATION, GameState.COMBAT, GameState.GALLERY]:
 			hud_root.visible = true
 			player.controls_enabled = true
@@ -861,45 +804,84 @@ func _toggle_lexicon(force_state: Variant = null) -> void:
 
 
 # ==============================================================================
-# STATE TRANSITIONS & GAMEPLAY FLOW
+# STATE TRANSITIONS & 3D PORTAL HUB
 # ==============================================================================
 
 func _enter_menu() -> void:
 	state = GameState.MENU
 	prompt_active = false
 	_clear_drones()
-	_set_gallery_visible(true)
-	player.controls_enabled = false
-	player.visible = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_menu_cam.current = true
-	hud_root.visible = false
+	_clear_projectiles_and_pickups()
+	_set_gallery_visible(false)
+	player.visible = true
+	player.camera.current = true
+	player.position = Vector3(0.0, 0.30, 6.4)
+	player.look_toward_point(Vector3(0.0, 2.0, 0.4))
+	player.controls_enabled = true
+	hud_root.visible = true
+	radio_panel.visible = false
+	feedback_banner.visible = false
 	menu_panel.visible = true
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	lexicon_open = false
+	_portal_cooldown = 0.65
 	_refresh_menu_labels()
+	_spawn_menu_portals()
+
+
+func _spawn_menu_portals() -> void:
+	_clear_drones()
+	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
+	var s_info := VocabData.SECTORS[act_s]
+	var sec_ids := VocabData.get_sector_ids(act_s)
+	var center_vid: String = sec_ids[0] if not sec_ids.is_empty() else "pomme"
+
+	# 1. Center Play Portal Gate (Walk into it with W or Shoot it!)
+	var p_start := TargetDrone.new()
+	drones_root.add_child(p_start)
+	p_start.setup(center_vid, Vector3(0.0, 2.05, 0.4), player.global_position, 0.12, 1.25, "PORTAL_START")
+	p_start.configure_as_portal_crystal(
+		"▶ PLAY STAGE %d: %s" % [act_s + 1, String(s_info["name_en"]).to_upper()],
+		"WALK INTO PORTAL [W]  OR  SHOOT TO START",
+		Color(1.0, 0.84, 0.22)
+	)
+	active_drones.append(p_start)
+
+	# 2. Left Practice Range Portal
+	var p_gal := TargetDrone.new()
+	drones_root.add_child(p_gal)
+	p_gal.setup("couronne", Vector3(-4.8, 2.00, 1.1), player.global_position, 0.10, 1.05, "PORTAL_GALLERY")
+	p_gal.configure_as_portal_crystal(
+		"◈ PRACTICE RANGE",
+		"WALK IN OR SHOOT",
+		Color(0.28, 0.94, 0.58)
+	)
+	active_drones.append(p_gal)
+
+	# 3. Right Stage Switcher Portal
+	var p_stg := TargetDrone.new()
+	drones_root.add_child(p_stg)
+	p_stg.setup("globe", Vector3(4.8, 2.00, 1.1), player.global_position, 0.10, 1.05, "PORTAL_STAGE")
+	p_stg.configure_as_portal_crystal(
+		"↻ SWITCH STAGE (%d/9)" % [act_s + 1],
+		"SHOOT TO CHANGE STAGE",
+		Color(0.38, 0.82, 1.0)
+	)
+	active_drones.append(p_stg)
 
 
 func _refresh_menu_labels() -> void:
 	var st := srs.get_summary_stats()
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	var s_info := VocabData.SECTORS[act_s]
-	menu_stats_lbl.text = "Stage %d of 9: %s   •   Words Learned: %d / %d" % [
+	menu_stats_lbl.text = "Stage %d/9: %s  •  Words Mastered: %d/%d  •  Walk into a 3D Portal [WASD] or Shoot It!" % [
 		act_s + 1, s_info["name_en"], st["seen"], st["total_words"]
 	]
-	match srs.sector_filter:
-		-1:
-			sector_btn.text = "◈ Stage Mode: Guided Campaign (Stage %d: %s) — Click to Switch Stage" % [
-				act_s + 1, s_info["name_en"]
-			]
-		-5:
-			sector_btn.text = "◈ Special Arcade Mode: 3D Size, Speed & Position Challenges"
-		_:
-			var sel_info := VocabData.SECTORS[clampi(srs.sector_filter, 0, VocabData.SECTORS.size() - 1)]
-			sector_btn.text = "◈ Selected Stage %d: %s (%s) — Click to Switch Stage" % [
-				srs.sector_filter + 1, sel_info["name_en"], sel_info["name_fr"]
-			]
+	if prompt_main_lbl:
+		prompt_main_lbl.text = "Walk into the Golden Portal [W] or Shoot It to Play!"
+	if prompt_sub_lbl:
+		prompt_sub_lbl.visible = false
 
 
 func _on_cycle_sector() -> void:
@@ -909,6 +891,8 @@ func _on_cycle_sector() -> void:
 	srs.sector_filter = order[(cur_idx + 1) % order.size()]
 	srs.save_progress()
 	_refresh_menu_labels()
+	if state == GameState.MENU:
+		_spawn_menu_portals()
 
 
 func _on_cycle_l1_mode() -> void:
@@ -924,6 +908,7 @@ func _on_start_mission_pressed() -> void:
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
+	radio_panel.visible = true
 	hover_info_lbl.text = ""
 	_set_gallery_visible(false)
 	player.visible = true
@@ -948,6 +933,7 @@ func _on_enter_gallery_pressed() -> void:
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
+	radio_panel.visible = true
 	feedback_banner.visible = false
 	player.visible = true
 	player.camera.current = true
@@ -1085,26 +1071,28 @@ func _spawn_vocab_drones(spec: Dictionary) -> void:
 	spawn_ids.shuffle()
 
 	var n := spawn_ids.size()
-	var xs3 := [-4.4, 0.0, 4.4]
-	var xs4 := [-6.2, -2.1, 2.1, 6.2]
+	var xs3 := [-4.6, 0.0, 4.6]
+	var xs4 := [-6.4, -2.2, 2.2, 6.4]
 	for i in range(n):
 		var sx: float = xs3[i] if n == 3 else (xs4[i] if i < 4 else (float(i - 2) * 3.5))
-		var sz: float = -0.5 if tier == 0 else (-2.6 if (i % 2 == 0) else -3.4)
-		var height := 2.15
+		var sz: float = -0.5 if tier == 0 else (-2.6 if (i % 2 == 0) else -3.6)
+		var height := 2.15 + (0.35 if (i % 2 == 1 and tier > 0) else 0.0)
 		var d := TargetDrone.new()
 		drones_root.add_child(d)
-		var mv := 0.20 if tier == 0 else (0.65 + float(mini(wave_number, 5)) * 0.06)
+		var mv := 0.25 if tier == 0 else (0.95 + float(mini(wave_number, 5)) * 0.10)
 		d.setup(spawn_ids[i], Vector3(sx, height, sz), player.global_position, mv, 1.15)
 		d.set_slot_badge(i + 1)
 		if tier == 0:
 			d.approach_speed = 0.0
 			if spawn_ids[i] == target_id:
 				var item := VocabData.get_by_id(target_id)
-				d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")), str(item.get("ipa", "")))
+				d.show_calibration_card(str(item.get("fr_def", target_id)), str(item.get("en", "")))
 		else:
-			d.approach_speed = 0.52 + float(mini(wave_number, 6)) * 0.06
-			d.defense_z = 3.2
+			d.approach_speed = 0.56 + float(mini(wave_number, 6)) * 0.06
+			d.defense_z = 3.6
+			d.can_fire_plasma = true
 			d.reached_defense_line.connect(_on_drone_reached_defense_line)
+			d.fired_plasma.connect(_spawn_enemy_plasma)
 		active_drones.append(d)
 
 
@@ -1151,7 +1139,9 @@ func _spawn_scenario_drones(spec: Dictionary) -> void:
 		d.set_slot_badge(i + 1)
 		d.approach_speed = 0.45
 		d.defense_z = 3.2
+		d.can_fire_plasma = true
 		d.reached_defense_line.connect(_on_drone_reached_defense_line)
+		d.fired_plasma.connect(_spawn_enemy_plasma)
 		active_drones.append(d)
 
 
@@ -1279,23 +1269,27 @@ func _refresh_prompt_hud() -> void:
 	var show_en := bool(current_spec["show_en_text"]) or (prompt_hint_stage >= 2)
 
 	if show_fr:
-		prompt_main_lbl.text = "♪  %s" % str(current_spec["prompt_fr"])
+		if ptype == "MODIFIER" and show_en:
+			var short_en := str(current_spec.get("sub_en", "")).split("•")[0].strip_edges()
+			prompt_main_lbl.text = "♪  %s   (%s)" % [str(current_spec["prompt_fr"]), short_en]
+		elif ptype == "VOCAB" and prompt_hint_stage >= 2 and int(current_spec.get("tier", 0)) >= 1:
+			var t_item := VocabData.get_by_id(str(current_spec.get("target_id", "")))
+			prompt_main_lbl.text = "♪  %s  =  %s" % [str(current_spec["prompt_fr"]), str(t_item.get("en", ""))]
+		else:
+			prompt_main_lbl.text = "♪  %s" % str(current_spec["prompt_fr"])
 	else:
 		if ptype == "MODIFIER":
-			prompt_main_lbl.text = "◉ LISTEN: Size / Speed Challenge!  ([H] Show Text • [E] Replay)"
+			prompt_main_lbl.text = "◉ LISTEN: Size / Speed Challenge!  [E] Replay • [H] Hint"
 		elif int(current_spec["tier"]) >= 3:
-			prompt_main_lbl.text = "◉ LISTEN: French Clue!  ([H] Show Text • [E] Replay)"
+			prompt_main_lbl.text = "◉ LISTEN: French Clue!  [E] Replay • [H] Hint"
 		else:
-			prompt_main_lbl.text = "◉ LISTEN & SHOOT!   ([E] Replay Audio  •  [H] Show Word)"
+			prompt_main_lbl.text = "◉ LISTEN & SHOOT!   [E] Replay  •  [H] Hint"
 
-	if show_en:
-		prompt_sub_lbl.text = str(current_spec["sub_en"])
-	else:
-		prompt_sub_lbl.text = "Stop the matching 3D target before it reaches your barricade!   ([H] Hint  •  [R] Slow Audio)"
+	prompt_sub_lbl.visible = false
 
 
 # ==============================================================================
-# SHOOTING, CONTRASTIVE FEEDBACK & INPUTS
+# SHOOTING, PORTAL GATES, PLASMA DODGING, GOLD PICKUPS & INPUTS
 # ==============================================================================
 
 func _on_player_hovered(entity: Node) -> void:
@@ -1307,7 +1301,9 @@ func _on_player_hovered(entity: Node) -> void:
 	elif entity is TargetDrone:
 		_reticle_col = Color(1.0, 0.88, 0.24)
 		var td := entity as TargetDrone
-		if td.is_grammar_crystal:
+		if td.is_portal_crystal:
+			hover_info_lbl.text = "Walk Into Portal [WASD] or Shoot [Click]"
+		elif td.is_grammar_crystal:
 			hover_info_lbl.text = "Option [%d]: %s" % [td.slot_number, td.grammar_option]
 		elif state == GameState.CALIBRATION:
 			var item := VocabData.get_by_id(td.vocab_id)
@@ -1330,7 +1326,6 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 		srs.mark_calibrated(ped.vocab_id)
 		var item := VocabData.get_by_id(ped.vocab_id)
 		prompt_main_lbl.text = "♪ %s  =  %s" % [item["fr_def"], item["en"]]
-		prompt_sub_lbl.text = str(item["tip"])
 		return
 
 	if not (entity is TargetDrone):
@@ -1338,6 +1333,11 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 
 	var drone := entity as TargetDrone
 	if drone.is_destroyed:
+		return
+
+	# Shooting any 3D Portal Gate activates or cycles it!
+	if drone.is_portal_crystal:
+		_trigger_portal_tag(drone.drone_tag, true)
 		return
 
 	if state == GameState.CALIBRATION:
@@ -1364,34 +1364,36 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 			audio.play_sfx("hit_ok", 0.02, -1.5)
 			var pts := 100
 			var fast_bonus := (drone.global_position.z < 0.0 and int(current_spec.get("tier", 0)) >= 1)
+			var action_shot := (not player.is_on_floor()) or (player._dash_timer > 0.0) or (player.global_position.z < 2.2)
 			if prompt_clean_try:
 				combo += 1
 				wave_hits_clean += 1
-				pts = (100 + combo * 25) + (50 if fast_bonus else 0)
+				pts = (100 + combo * 25) + (50 if fast_bonus else 0) + (50 if action_shot else 0)
 			else:
 				pts = 75
 			score += pts
-			if fast_bonus and prompt_clean_try and drone.custom_ok_label == "":
+			if prompt_clean_try and drone.custom_ok_label == "":
 				var f_item := VocabData.get_by_id(target_tag)
-				drone.custom_ok_label = "+%d FAST! ✓ %s (%s)" % [pts, f_item.get("fr_def", target_tag), f_item.get("en", "")]
+				var bonus_tag := "ACTION SHOT!" if action_shot else ("FAST!" if fast_bonus else "✓")
+				drone.custom_ok_label = "+%d %s %s (%s)" % [pts, bonus_tag, f_item.get("fr_def", target_tag), f_item.get("en", "")]
+
+			var drop_pos := drone.global_position
 			drone.explode_success(world_root, pts)
 			active_drones.erase(drone)
+			_spawn_ground_pickup(drop_pos)
 
 			if ptype == "GRAMMAR":
 				var gid := str(current_spec["grammar_id"])
 				srs.record_grammar_result(gid, prompt_clean_try, prompt_used_assist)
-				prompt_main_lbl.text = "✓ %s" % str(current_spec["sentence_full"])
-				prompt_sub_lbl.text = str(current_spec["en"])
+				prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["sentence_full"]), str(current_spec["en"])]
 			elif ptype == "MODIFIER":
 				srs.global_step += 1
 				srs.save_progress()
 				prompt_main_lbl.text = "✓ %s" % str(current_spec["prompt_fr"])
-				prompt_sub_lbl.text = str(current_spec["rule"])
 			else:
 				srs.record_result(target_tag, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 				var t_item := VocabData.get_by_id(target_tag)
 				prompt_main_lbl.text = "✓ %s  =  %s" % [t_item["fr_def"], t_item["en"]]
-				prompt_sub_lbl.text = str(t_item["tip"])
 
 			_update_stats_hud()
 			transition_delay = 1.05
@@ -1436,6 +1438,22 @@ func _on_player_fired(entity: Node, _hit_pos: Vector3) -> void:
 			_update_stats_hud()
 
 
+func _trigger_portal_tag(ptag: String, from_shot: bool = false) -> void:
+	if _portal_cooldown > 0.0:
+		return
+	_portal_cooldown = 0.55
+	match ptag:
+		"PORTAL_START":
+			_on_start_mission_pressed()
+		"PORTAL_GALLERY":
+			_on_enter_gallery_pressed()
+		"PORTAL_STAGE":
+			_on_cycle_sector()
+		"PORTAL_NEXT_WAVE":
+			if from_shot or state == GameState.WAVE_SUMMARY:
+				_continue_to_next_round()
+
+
 func _highlight_true_target(target_tag: String) -> void:
 	var item := VocabData.get_by_id(target_tag)
 	for d in active_drones:
@@ -1462,16 +1480,14 @@ func _play_slow_assist() -> void:
 		var item := VocabData.get_by_id(tid)
 		if not item.is_empty():
 			prompt_main_lbl.text = "♪ %s  =  %s" % [item["fr_def"], item["en"]]
-			prompt_sub_lbl.text = str(item["tip"])
 	elif ptype == "MODIFIER":
 		prompt_main_lbl.text = "♪ %s" % str(current_spec["prompt_fr"])
-		prompt_sub_lbl.text = str(current_spec["sub_en"])
 
 
 func _show_feedback(msg: String, is_ok: bool) -> void:
 	feedback_banner.visible = true
 	var border_col := Color(0.42, 0.96, 0.56, 0.95) if is_ok else Color(0.98, 0.76, 0.24, 0.96)
-	var bg_col := Color(0.10, 0.20, 0.12, 0.96) if is_ok else Color(0.24, 0.11, 0.08, 0.96)
+	var bg_col := Color(0.10, 0.20, 0.12, 0.88) if is_ok else Color(0.24, 0.11, 0.08, 0.88)
 	feedback_banner.add_theme_stylebox_override("panel", _make_panel_style(bg_col, border_col, 10, 2))
 	feedback_lbl.text = msg
 	feedback_lbl.add_theme_color_override("font_color", Color(0.75, 1.0, 0.82) if is_ok else Color(1.0, 0.92, 0.68))
@@ -1488,34 +1504,239 @@ func _finish_wave() -> void:
 	prompt_active = false
 	_clear_drones()
 	feedback_banner.visible = false
-	hud_root.visible = false
-	player.controls_enabled = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	summary_panel.visible = false
+	hud_root.visible = true
+	player.controls_enabled = true
 
 	audio.play_sfx("wave_up")
 	audio.play_voice("radio_bravo.ogg")
 
-	var st := srs.get_summary_stats()
 	var act_s := srs.get_active_campaign_sector()
 	var s_info := VocabData.SECTORS[act_s]
-	summary_lbl.text = (
-		"Round %d Complete!   •   First-Try Hits: %d / %d\n"
-		+ "Score: %d   •   Best Streak: x%d\n\n"
-		+ "Current Stage: Stage %d/9 (%s)\n"
-		+ "Words Learned: %d / %d   •   Audio-Ready: %d"
-	) % [
-		wave_number, wave_hits_clean, PROMPTS_PER_WAVE,
-		score, maxi(1, combo),
-		act_s + 1, s_info["name_en"],
-		st["seen"], st["total_words"], st["listening_ready"]
+	radio_panel.visible = true
+	prompt_main_lbl.text = "★ ROUND %d CLEAR (%d/%d)!  Walk Into the Golden Portal!" % [
+		wave_number, wave_hits_clean, PROMPTS_PER_WAVE
 	]
-	summary_panel.visible = true
+	timer_bar.value = 100.0
+
+	# Spawn a glowing 3D Portal Gate in the courtyard + collectible Gold Stars on the floor!
+	var p_next := TargetDrone.new()
+	drones_root.add_child(p_next)
+	p_next.setup("etoile", Vector3(0.0, 2.05, 0.4), player.global_position, 0.18, 1.30, "PORTAL_NEXT_WAVE")
+	p_next.configure_as_portal_crystal(
+		"★ NEXT ROUND (ROUND %d)" % (wave_number + 1),
+		"Stage %d: %s  •  Walk Into Portal [WASD] or Shoot It!" % [act_s + 1, s_info["name_en"]],
+		Color(1.0, 0.84, 0.22)
+	)
+	active_drones.append(p_next)
+
+	_spawn_ground_pickup(Vector3(-2.6, 0.85, 2.4))
+	_spawn_ground_pickup(Vector3(2.6, 0.85, 2.4))
 
 
 func _clear_drones() -> void:
 	active_drones.clear()
 	for ch in drones_root.get_children():
 		ch.queue_free()
+	if projectiles_root:
+		_projectiles.clear()
+		for ch in projectiles_root.get_children():
+			ch.queue_free()
+
+
+func _clear_projectiles_and_pickups() -> void:
+	_projectiles.clear()
+	if projectiles_root:
+		for ch in projectiles_root.get_children():
+			ch.queue_free()
+	_pickups.clear()
+	if pickups_root:
+		for ch in pickups_root.get_children():
+			ch.queue_free()
+
+
+func _spawn_enemy_plasma(origin_pos: Vector3) -> void:
+	if state != GameState.COMBAT or not prompt_active or not is_instance_valid(player):
+		return
+	if _projectiles.size() >= 4:
+		return
+
+	var orb := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.24
+	sm.height = 0.48
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.36, 0.18)
+	sm.material = mat
+	orb.mesh = sm
+
+	var halo := MeshInstance3D.new()
+	var hm := SphereMesh.new()
+	hm.radius = 0.42
+	hm.height = 0.84
+	var hmat := StandardMaterial3D.new()
+	hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hmat.albedo_color = Color(1.0, 0.65, 0.20, 0.38)
+	hm.material = hmat
+	halo.mesh = hm
+	orb.add_child(halo)
+
+	projectiles_root.add_child(orb)
+	orb.global_position = origin_pos + Vector3(0.0, 0.1, 0.45)
+
+	var aim_pos := player.global_position + Vector3(0.0, 1.25, 0.0)
+	var dir := (aim_pos - orb.global_position).normalized()
+	_projectiles.append({
+		"node": orb,
+		"vel": dir * 7.8,
+		"life": 4.2,
+		"dodged_awarded": false
+	})
+
+
+func _update_projectiles(delta: float) -> void:
+	if _projectiles.is_empty():
+		return
+	var dt := minf(delta, 0.04)
+	var space_state := get_world_3d().direct_space_state
+	var p_center := player.global_position + Vector3(0.0, 1.2, 0.0)
+
+	for i in range(_projectiles.size() - 1, -1, -1):
+		var p: Dictionary = _projectiles[i]
+		var node: Node3D = p["node"]
+		if not is_instance_valid(node):
+			_projectiles.remove_at(i)
+			continue
+
+		var old_pos := node.global_position
+		var vel: Vector3 = p["vel"]
+		var next_pos := old_pos + vel * dt
+		p["life"] = float(p["life"]) - dt
+
+		# Check if blocked by stone cover pillars/walls (collision mask 1)
+		var q := PhysicsRayQueryParameters3D.create(old_pos, next_pos, 1)
+		var hit := space_state.intersect_ray(q)
+		if not hit.is_empty():
+			node.queue_free()
+			_projectiles.remove_at(i)
+			continue
+
+		node.global_position = next_pos
+		var dist := next_pos.distance_to(p_center)
+		if dist < 0.88:
+			# Hit player!
+			shield_hp = maxf(10.0, shield_hp - 8.0)
+			_damage_flash_timer = 0.35
+			audio.play_sfx("shield_hit", 0.02, -3.0)
+			_update_stats_hud()
+			node.queue_free()
+			_projectiles.remove_at(i)
+			continue
+		elif not bool(p["dodged_awarded"]) and next_pos.z > p_center.z + 0.6 and dist < 3.6:
+			p["dodged_awarded"] = true
+			score += 25
+			_update_stats_hud()
+
+		if float(p["life"]) <= 0.0 or next_pos.z > 12.0 or absf(next_pos.x) > 15.0:
+			node.queue_free()
+			_projectiles.remove_at(i)
+
+
+func _spawn_ground_pickup(world_pos: Vector3) -> void:
+	if not pickups_root:
+		return
+	var root := Node3D.new()
+	pickups_root.add_child(root)
+	var gz := clampf(world_pos.z, -2.5, 5.5)
+	var gx := clampf(world_pos.x, -6.5, 6.5)
+	root.global_position = Vector3(gx, 0.85, gz)
+
+	var star_model := Node3D.new()
+	var star_scene := load("res://assets/models/etoile.blend") as PackedScene
+	if star_scene:
+		var inst := star_scene.instantiate() as Node3D
+		if inst:
+			star_model.add_child(inst)
+	star_model.scale = Vector3.ONE * 0.72
+	root.add_child(star_model)
+
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.48
+	tm.outer_radius = 0.56
+	var rmat := StandardMaterial3D.new()
+	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rmat.albedo_color = Color(1.0, 0.86, 0.22)
+	tm.material = rmat
+	ring.mesh = tm
+	ring.position = Vector3(0.0, -0.45, 0.0)
+	root.add_child(ring)
+
+	var lbl := Label3D.new()
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.pixel_size = 0.0042
+	lbl.font_size = 36
+	lbl.outline_size = 10
+	lbl.modulate = Color(1.0, 0.92, 0.32)
+	lbl.outline_modulate = Color(0.08, 0.05, 0.02, 0.96)
+	lbl.text = "★ +75"
+	lbl.position = Vector3(0.0, 0.72, 0.0)
+	root.add_child(lbl)
+
+	_pickups.append({
+		"node": root,
+		"model": star_model,
+		"life": 14.0,
+		"phase": randf() * TAU
+	})
+
+
+func _update_pickups(delta: float) -> void:
+	if _pickups.is_empty() or not is_instance_valid(player):
+		return
+	var p_pos := player.global_position
+	for i in range(_pickups.size() - 1, -1, -1):
+		var pk: Dictionary = _pickups[i]
+		var node: Node3D = pk["node"]
+		if not is_instance_valid(node):
+			_pickups.remove_at(i)
+			continue
+		pk["life"] = float(pk["life"]) - delta
+		var ph := float(pk["phase"]) + delta * 3.4
+		pk["phase"] = ph
+		var mdl: Node3D = pk["model"]
+		if is_instance_valid(mdl):
+			mdl.rotation.y += delta * 2.6
+			mdl.position.y = sin(ph) * 0.14
+
+		var flat_dist := Vector2(node.global_position.x - p_pos.x, node.global_position.z - p_pos.z).length()
+		if flat_dist < 1.85:
+			score += 75
+			shield_hp = minf(100.0, shield_hp + 15.0)
+			audio.play_sfx("hit_ok", 0.04, -2.5)
+			_update_stats_hud()
+			node.queue_free()
+			_pickups.remove_at(i)
+			continue
+
+		if float(pk["life"]) <= 0.0:
+			node.queue_free()
+			_pickups.remove_at(i)
+
+
+func _check_portal_collisions() -> void:
+	if _portal_cooldown > 0.0 or not is_instance_valid(player):
+		return
+	var p_pos := player.global_position
+	for d in active_drones:
+		if is_instance_valid(d) and not d.is_destroyed and d.is_portal_crystal:
+			var flat_dist := Vector2(d.global_position.x - p_pos.x, d.global_position.z - p_pos.z).length()
+			if flat_dist < 1.95:
+				_trigger_portal_tag(d.drone_tag, false)
+				return
 
 
 ## Allows pressing [1], [2], [3], or [4] during Combat to quick-shoot the Nth target from left to right!
@@ -1559,7 +1780,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if lexicon_open or state == GameState.MENU or state == GameState.WAVE_SUMMARY:
+	if lexicon_open:
+		return
+
+	if state == GameState.MENU:
+		if kc in [KEY_ENTER, KEY_KP_ENTER, KEY_1]:
+			_on_start_mission_pressed()
+		elif kc == KEY_G:
+			_on_enter_gallery_pressed()
 		return
 
 	if kc == KEY_G:
@@ -1588,14 +1816,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if state == GameState.MENU:
-		_menu_orbit_angle += delta * 0.16
-		_menu_cam.global_position = Vector3(sin(_menu_orbit_angle) * 13.5, 4.6, cos(_menu_orbit_angle) * 13.5 - 2.0)
-		_menu_cam.look_at(Vector3(0, 1.5, -6.5), Vector3.UP)
-		return
+	if _portal_cooldown > 0.0:
+		_portal_cooldown = maxf(0.0, _portal_cooldown - delta)
 
 	if crosshair_reticle and player:
-		crosshair_reticle.set_state(_reticle_col, player.is_aiming)
+		var hit_flash := _reticle_col if _damage_flash_timer <= 0.0 else Color(1.0, 0.25, 0.18)
+		crosshair_reticle.set_state(hit_flash, player.is_aiming)
+	if _damage_flash_timer > 0.0:
+		_damage_flash_timer = maxf(0.0, _damage_flash_timer - delta)
+		if _damage_flash:
+			_damage_flash.color = Color(1.0, 0.22, 0.14, _damage_flash_timer * 0.45)
+	elif _damage_flash and _damage_flash.color.a > 0.0:
+		_damage_flash.color = Color(1.0, 0.22, 0.14, 0.0)
+
+	_update_projectiles(delta)
+	_update_pickups(delta)
+	if state in [GameState.MENU, GameState.WAVE_SUMMARY]:
+		_check_portal_collisions()
 
 	var bars := audio.get_waveform_bars(12)
 	for i in range(mini(bars.size(), wave_bars.size())):
@@ -1651,14 +1888,15 @@ func _run_automated_verification() -> void:
 	assert(int(r_err["new_tier"]) == 1, "Mistake should drop Level 3 -> Level 2 and log confusion")
 	print("VERIFY_OK: French Target Arcade SRS & Stage Progression verified.")
 
+	# 1. Playable 3D Hub Menu with 3 physical 3D Portal Gates (PLAY, PRACTICE GALLERY, STAGE SELECT)
 	srs.reset_progress()
 	srs.sector_filter = -1
-	_refresh_menu_labels()
-	for i in range(4):
+	_enter_menu()
+	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/01_menu.png")
 
-	# 2. Level 1 (Tier 0): New Word Spotlight in Stage 1 showcasing the matte Apple (`pomme.blend`) & Heart (`coeur.blend`)
+	# 2. Level 1 (Tier 0): New Word Spotlight in Stage 1 with collectible 3D Gold Star pickup & stone cover pillars
 	srs.reset_progress()
 	srs.sector_filter = 0
 	_on_start_mission_pressed()
@@ -1674,31 +1912,37 @@ func _run_automated_verification() -> void:
 		if demo_ids[i] == "pomme":
 			d.show_calibration_card("la pomme", "the apple")
 		active_drones.append(d)
+	_spawn_ground_pickup(Vector3(1.8, 0.85, 3.2))
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.15, -0.5))
+	player.look_toward_point(Vector3(0.0, 2.0, -0.5))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/02_calibration_3d.png")
 
-	# 3. Level 3 (Tier 2): Pure Listening Arcade Wave with approaching targets
+	# 3. Level 3 (Tier 2): Pure Listening Action Wave with incoming Plasma Orbs & Gold Star Pickup
 	srs.sector_filter = 4
 	for vid in ["avion", "train", "voiture", "velo", "valise"]:
 		srs.mark_calibrated(vid)
 		srs.cards[vid]["tier"] = 2
 	_clear_drones()
+	_clear_projectiles_and_pickups()
 	current_spec = srs.build_prompt_spec("avion")
 	_spawn_vocab_drones(current_spec)
 	for d in active_drones:
 		d.approach_paused = true
 		d._anchor_pos.z = -1.2
+	_spawn_enemy_plasma(Vector3(-1.4, 1.85, 1.2))
+	_spawn_enemy_plasma(Vector3(1.6, 1.80, 0.6))
+	_spawn_ground_pickup(Vector3(-1.5, 0.85, 3.4))
 	_refresh_prompt_hud()
-	player.look_toward_point(Vector3(0.0, 2.15, -1.2))
+	player.look_toward_point(Vector3(0.0, 2.0, -1.2))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/03_combat_pure_listening.png")
 
 	# 4. 3D Size, Speed & Position Challenge ("la plus grande !")
 	_clear_drones()
+	_clear_projectiles_and_pickups()
 	current_spec = srs.build_modifier_prompt_spec(0)
 	_spawn_modifier_drones(current_spec)
 	prompt_hint_stage = 2
@@ -1708,28 +1952,16 @@ func _run_automated_verification() -> void:
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/06_a2_spatial_modifiers.png")
 
-	# 5. Pause-and-Learn Mistake Repair Spotlight (shows how wrong shots freeze the wave & highlight the right object)
-	_clear_drones()
-	srs.sector_filter = 0
-	current_spec = srs.build_prompt_spec("pain")
-	var err_ids := ["pomme", "pain", "bouteille"]
-	for i in range(3):
-		var d := TargetDrone.new()
-		drones_root.add_child(d)
-		d.setup(err_ids[i], Vector3(demo_xs[i], 2.15, -0.6), player.global_position, 0.0, 1.18)
-		d.set_slot_badge(i + 1)
-		active_drones.append(d)
-	_refresh_prompt_hud()
-	active_drones[0].flash_wrong_hit()
-	_highlight_true_target("pain")
-	_play_slow_assist()
-	_show_feedback("✗ That was la pomme (the apple).  →  ★ Shoot the GOLD target: le pain = the bread", false)
-	player.look_toward_point(Vector3(0.0, 2.15, -0.6))
+	# 5. In-World 3D Portal Wave Transition (between-round Golden Portal Gate + 3 collectible Gold Stars!)
+	_finish_wave()
+	player.position = Vector3(0.0, 0.30, 6.4)
+	player.look_toward_point(Vector3(0.0, 1.9, 0.4))
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/07_b1_grammar_breach.png")
 
 	# 6. 3D Practice Gallery showing Stage 4 (fleur, coeur, poisson, etoile, fusee)
+	_clear_projectiles_and_pickups()
 	feedback_banner.visible = false
 	_on_enter_gallery_pressed()
 	_load_gallery_sector(3)
