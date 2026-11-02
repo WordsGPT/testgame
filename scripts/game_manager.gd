@@ -1,20 +1,12 @@
 class_name GameManager
 extends Node3D
 
-## Master Orchestrator for BONJOUR PARIS ! (2.5D Hand-Painted Parisian Action-Adventure)
-## Features:
-## - 5 Hand-Painted Studio Ghibli / Parisian Storybook 2.5D Maps:
-##     1. Au Café de Flore (map_cafe.jpg)
-##     2. La Maison Parisienne (map_maison.jpg)
-##     3. Le Marché de Rue (map_marche.jpg)
-##     4. La Gare du Nord (map_gare.jpg)
-##     5. Le Jardin du Luxembourg (map_jardin.jpg)
-## - Genuine WASD + Click-to-Walk Bistro & Neighborhood Gameplay Loop:
-##     - Walk to counter/market stations to pick up illustrated items onto your overhead Bistro Tray
-##     - Deliver single-item and 2-item combo orders to the Customer Service Table
-##     - Run through glowing Street Direction Checkpoints in sequence (À gauche, En haut, À droite...)
-##     - Complete real-life French conversations and walk through the unlocked Street Archway!
-## - Illustrated companion Chloé (chloe_portrait.jpg) with native French voice + clear English guidance.
+## Master Orchestrator for BONJOUR PARIS ! (2.5D Hand-Painted Parisian Story Adventure)
+## - Starts immediately in Chapter 1 (no dead menu state waiting for Space).
+## - Single uncluttered Storybook Dialogue Box at the bottom + tiny top-left location pill.
+## - Zero yellow answer spoilers by default: players look at the natural scene objects,
+##   pick them up onto their tray, serve the table, complete real-life conversations,
+##   and navigate the 4-way Parisian Street Crossroads ('map_carrefour.jpg') to reach the next chapter!
 
 enum GameState {
 	MENU,
@@ -25,9 +17,9 @@ enum GameState {
 }
 
 const PROMPTS_PER_WAVE := 6
-const PROMPT_TIME_LIMIT := 22.0
+const PROMPT_TIME_LIMIT := 25.0
 
-var state: GameState = GameState.MENU
+var state: GameState = GameState.COMBAT
 var srs: SRSEngine
 var audio: AudioDirector
 var paris_world: ParisWorld2D
@@ -96,7 +88,8 @@ func _ready() -> void:
 	add_child(audio)
 
 	_build_ui()
-	_enter_menu()
+	# Start immediately in Chapter 1 gameplay — no dead menu screen waiting for Space!
+	_on_start_mission_pressed()
 
 	var user_args := OS.get_cmdline_user_args()
 	if user_args.has("--verify-screenshots"):
@@ -104,10 +97,10 @@ func _ready() -> void:
 
 
 # ==============================================================================
-# UI, ILLUSTRATED CHLOÉ COMPANION & 2.5D PARIS WORLD SETUP
+# UNCLUTTERED STORYBOOK UI (1 Bottom Dialogue Bar + 1 Top-Left Pill)
 # ==============================================================================
 
-func _make_panel_style(bg: Color, border: Color, radius: int = 12, border_w: int = 2) -> StyleBoxFlat:
+func _make_panel_style(bg: Color, border: Color, radius: int = 14, border_w: int = 2) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border
@@ -115,8 +108,8 @@ func _make_panel_style(bg: Color, border: Color, radius: int = 12, border_w: int
 	sb.set_corner_radius_all(radius)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
 	return sb
 
 
@@ -125,7 +118,7 @@ func _build_ui() -> void:
 	ui_layer.layer = 2
 	add_child(ui_layer)
 
-	# 0. 2.5D Hand-Painted Parisian World Canvas (renders behind HUD controls)
+	# 0. 2.5D Hand-Painted Parisian World Canvas
 	paris_world = ParisWorld2D.new()
 	paris_world.name = "ParisWorld2D"
 	paris_world.station_interacted.connect(_on_world_station_interacted)
@@ -140,172 +133,141 @@ func _build_ui() -> void:
 	hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui_layer.add_child(hud_root)
 
-	# 1. Top-Center Order & Audio Banner Pill
-	radio_panel = PanelContainer.new()
-	var pill_style := _make_panel_style(Color(0.11, 0.08, 0.06, 0.90), Color(1.0, 0.86, 0.36, 0.85), 22, 2)
-	pill_style.content_margin_left = 22
-	pill_style.content_margin_right = 22
-	pill_style.content_margin_top = 8
-	pill_style.content_margin_bottom = 8
-	radio_panel.add_theme_stylebox_override("panel", pill_style)
-	radio_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	radio_panel.position = Vector2(-340, 10)
-	radio_panel.custom_minimum_size = Vector2(680, 58)
-	radio_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(radio_panel)
+	# 1. Compact Top-Left Story Chapter Pill + Chapter/Wordbook Buttons
+	var top_bar := HBoxContainer.new()
+	top_bar.position = Vector2(14, 10)
+	top_bar.add_theme_constant_override("separation", 8)
+	hud_root.add_child(top_bar)
 
-	var rv := VBoxContainer.new()
-	rv.add_theme_constant_override("separation", 3)
-	radio_panel.add_child(rv)
-
-	speaker_lbl = Label.new()
-	speaker_lbl.visible = false
-	rv.add_child(speaker_lbl)
-
-	mode_tag_lbl = Label.new()
-	mode_tag_lbl.visible = false
-	rv.add_child(mode_tag_lbl)
-
-	prompt_main_lbl = Label.new()
-	prompt_main_lbl.text = "Bienvenue à Paris !"
-	prompt_main_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt_main_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_main_lbl.add_theme_font_size_override("font_size", 19)
-	prompt_main_lbl.add_theme_color_override("font_color", Color(1.0, 0.98, 0.90))
-	prompt_main_lbl.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.95))
-	prompt_main_lbl.add_theme_constant_override("outline_size", 5)
-	rv.add_child(prompt_main_lbl)
-
-	prompt_sub_lbl = Label.new()
-	prompt_sub_lbl.text = ""
-	prompt_sub_lbl.visible = false
-	prompt_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt_sub_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	prompt_sub_lbl.add_theme_font_size_override("font_size", 13)
-	prompt_sub_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.52))
-	rv.add_child(prompt_sub_lbl)
-
-	timer_bar = ProgressBar.new()
-	timer_bar.show_percentage = false
-	timer_bar.min_value = 0.0
-	timer_bar.max_value = 100.0
-	timer_bar.value = 100.0
-	timer_bar.custom_minimum_size = Vector2(0, 5)
-	var tb_bg := StyleBoxFlat.new()
-	tb_bg.bg_color = Color(1.0, 1.0, 1.0, 0.14)
-	tb_bg.set_corner_radius_all(2)
-	timer_bar.add_theme_stylebox_override("background", tb_bg)
-	var tb_fill := StyleBoxFlat.new()
-	tb_fill.bg_color = Color(1.0, 0.82, 0.24)
-	tb_fill.set_corner_radius_all(2)
-	timer_bar.add_theme_stylebox_override("fill", tb_fill)
-	rv.add_child(timer_bar)
-
-	# 2. Helpful Guidance Callout Pill (Below Top Banner)
-	feedback_banner = PanelContainer.new()
-	feedback_banner.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.16, 0.10, 0.06, 0.92), Color(1.0, 0.82, 0.24, 0.92), 16, 2)
-	)
-	feedback_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	feedback_banner.position = Vector2(-310, 82)
-	feedback_banner.custom_minimum_size = Vector2(620, 34)
-	feedback_banner.visible = false
-	feedback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(feedback_banner)
-
-	feedback_lbl = Label.new()
-	feedback_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	feedback_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	feedback_lbl.add_theme_font_size_override("font_size", 14)
-	feedback_lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.03, 0.95))
-	feedback_lbl.add_theme_constant_override("outline_size", 4)
-	feedback_banner.add_child(feedback_lbl)
-
-	# 3. Top-Left Place & Tips Badge
 	_stats_panel = PanelContainer.new()
-	_stats_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.12, 0.09, 0.06, 0.88), Color(0.92, 0.74, 0.36, 0.78), 14, 2)
-	)
-	_stats_panel.position = Vector2(16, 10)
-	_stats_panel.custom_minimum_size = Vector2(250, 62)
+	var st_style := _make_panel_style(Color(0.11, 0.08, 0.06, 0.88), Color(0.92, 0.76, 0.38, 0.82), 12, 1)
+	st_style.content_margin_left = 12
+	st_style.content_margin_right = 12
+	st_style.content_margin_top = 5
+	st_style.content_margin_bottom = 5
+	_stats_panel.add_theme_stylebox_override("panel", st_style)
 	_stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(_stats_panel)
+	top_bar.add_child(_stats_panel)
 
-	var sv := VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 2)
-	_stats_panel.add_child(sv)
+	var shbox := HBoxContainer.new()
+	shbox.add_theme_constant_override("separation", 14)
+	_stats_panel.add_child(shbox)
 
 	wave_lbl = Label.new()
-	wave_lbl.text = "AU CAFÉ DE FLORE  •  ORDER 1/6"
+	wave_lbl.text = "Ch. 1 : Au Café de Flore (1/6)"
 	wave_lbl.add_theme_font_size_override("font_size", 13)
 	wave_lbl.add_theme_color_override("font_color", Color(1.0, 0.96, 0.88))
-	sv.add_child(wave_lbl)
+	shbox.add_child(wave_lbl)
 
 	score_lbl = Label.new()
-	score_lbl.text = "★ 0 PTS   •   STREAK x1"
-	score_lbl.add_theme_font_size_override("font_size", 16)
+	score_lbl.text = "★ 0"
+	score_lbl.add_theme_font_size_override("font_size", 14)
 	score_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.28))
-	sv.add_child(score_lbl)
+	shbox.add_child(score_lbl)
 
+	sector_btn = Button.new()
+	sector_btn.text = "↻ Chapter (1/9)"
+	sector_btn.custom_minimum_size = Vector2(126, 30)
+	sector_btn.add_theme_font_size_override("font_size", 12)
+	sector_btn.pressed.connect(_on_cycle_sector)
+	top_bar.add_child(sector_btn)
+
+	var book_top_b := Button.new()
+	book_top_b.text = "♪ Wordbook [Tab]"
+	book_top_b.custom_minimum_size = Vector2(128, 30)
+	book_top_b.add_theme_font_size_override("font_size", 12)
+	book_top_b.pressed.connect(func(): _toggle_lexicon(true))
+	top_bar.add_child(book_top_b)
+
+	# Hidden legacy nodes (kept as valid references so no extra boxes clutter the top of the screen!)
+	radio_panel = PanelContainer.new()
+	radio_panel.visible = false
+	hud_root.add_child(radio_panel)
+	speaker_lbl = Label.new()
+	radio_panel.add_child(speaker_lbl)
+	mode_tag_lbl = Label.new()
+	radio_panel.add_child(mode_tag_lbl)
+	prompt_sub_lbl = Label.new()
+	radio_panel.add_child(prompt_sub_lbl)
+	timer_bar = ProgressBar.new()
+	radio_panel.add_child(timer_bar)
 	shield_bar = ProgressBar.new()
-	shield_bar.visible = false
-	sv.add_child(shield_bar)
+	radio_panel.add_child(shield_bar)
+	feedback_banner = PanelContainer.new()
+	feedback_banner.visible = false
+	hud_root.add_child(feedback_banner)
+	feedback_lbl = Label.new()
+	feedback_banner.add_child(feedback_lbl)
+	hotkeys_lbl = Label.new()
+	radio_panel.add_child(hotkeys_lbl)
 
-	# 4. Illustrated Companion Card ("Chloé" — Bottom-Left with Studio Ghibli Portrait!)
+	# 2. Single Storybook Dialogue Bar at the Bottom (Portrait + French Prompt + Chloé's Tip + Replay/Hint Buttons)
 	companion_panel = PanelContainer.new()
-	var comp_style := _make_panel_style(Color(0.12, 0.09, 0.07, 0.93), Color(1.0, 0.84, 0.36, 0.88), 18, 2)
-	comp_style.content_margin_left = 10
-	comp_style.content_margin_right = 16
-	comp_style.content_margin_top = 8
-	comp_style.content_margin_bottom = 8
+	var comp_style := _make_panel_style(Color(0.11, 0.08, 0.06, 0.94), Color(0.96, 0.80, 0.36, 0.90), 18, 2)
+	comp_style.content_margin_left = 12
+	comp_style.content_margin_right = 14
+	comp_style.content_margin_top = 10
+	comp_style.content_margin_bottom = 10
 	companion_panel.add_theme_stylebox_override("panel", comp_style)
-	companion_panel.position = Vector2(16, 594)
-	companion_panel.custom_minimum_size = Vector2(760, 86)
-	companion_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	companion_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	companion_panel.position = Vector2(-510, -124)
+	companion_panel.custom_minimum_size = Vector2(1020, 112)
 	hud_root.add_child(companion_panel)
 
 	var comp_hbox := HBoxContainer.new()
-	comp_hbox.add_theme_constant_override("separation", 12)
+	comp_hbox.add_theme_constant_override("separation", 14)
 	companion_panel.add_child(comp_hbox)
 
 	companion_portrait = TextureRect.new()
-	companion_portrait.custom_minimum_size = Vector2(68, 68)
+	companion_portrait.custom_minimum_size = Vector2(84, 84)
 	companion_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	companion_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	if ResourceLoader.exists("res://assets/sprites/chloe_portrait.jpg"):
 		companion_portrait.texture = load("res://assets/sprites/chloe_portrait.jpg") as Texture2D
 	comp_hbox.add_child(companion_portrait)
 
+	var text_vb := VBoxContainer.new()
+	text_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_vb.add_theme_constant_override("separation", 5)
+	comp_hbox.add_child(text_vb)
+
+	prompt_main_lbl = Label.new()
+	prompt_main_lbl.text = "« Bonjour ! Bienvenue à Paris ! »"
+	prompt_main_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	prompt_main_lbl.add_theme_font_size_override("font_size", 18)
+	prompt_main_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.52))
+	prompt_main_lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.02, 0.95))
+	prompt_main_lbl.add_theme_constant_override("outline_size", 4)
+	text_vb.add_child(prompt_main_lbl)
+
 	companion_lbl = Label.new()
-	companion_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	companion_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	companion_lbl.text = "Chloé : « Bonjour ! Bienvenue au Café de Flore ! » (Welcome to Café de Flore!)"
+	companion_lbl.text = "Chloé : Walk with [WASD] or Click to pick up the requested item, then bring it to the table!"
 	companion_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	companion_lbl.add_theme_font_size_override("font_size", 14)
-	companion_lbl.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88))
-	companion_lbl.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.03, 0.95))
-	companion_lbl.add_theme_constant_override("outline_size", 4)
-	comp_hbox.add_child(companion_lbl)
+	companion_lbl.add_theme_color_override("font_color", Color(0.98, 0.95, 0.88))
+	text_vb.add_child(companion_lbl)
 
-	# 5. Bottom Controls Strip
-	var bot_panel := PanelContainer.new()
-	bot_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	bot_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bot_panel.position = Vector2(-540, -28)
-	bot_panel.custom_minimum_size = Vector2(1080, 24)
-	bot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(bot_panel)
+	var action_vb := VBoxContainer.new()
+	action_vb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	action_vb.add_theme_constant_override("separation", 6)
+	comp_hbox.add_child(action_vb)
 
-	hotkeys_lbl = Label.new()
-	hotkeys_lbl.text = "[WASD / Click] Walk   •   [1–5] Pick Up Item   •   [Space] Serve Table   •   [E] Replay Audio   •   [H] Hint   •   [Tab] Word & Phrase Book"
-	hotkeys_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hotkeys_lbl.add_theme_font_size_override("font_size", 13)
-	hotkeys_lbl.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88, 0.95))
-	hotkeys_lbl.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.95))
-	hotkeys_lbl.add_theme_constant_override("outline_size", 5)
-	bot_panel.add_child(hotkeys_lbl)
+	var replay_b := Button.new()
+	replay_b.text = "♪ Replay [E]"
+	replay_b.custom_minimum_size = Vector2(114, 34)
+	replay_b.add_theme_font_size_override("font_size", 12)
+	replay_b.pressed.connect(func():
+		audio.play_voice(str(current_spec.get("audio_file", "")))
+	)
+	action_vb.add_child(replay_b)
+
+	var hint_b := Button.new()
+	hint_b.text = "? Hint [H]"
+	hint_b.custom_minimum_size = Vector2(114, 34)
+	hint_b.add_theme_font_size_override("font_size", 12)
+	hint_b.pressed.connect(_trigger_hint)
+	action_vb.add_child(hint_b)
 
 	_build_menu_overlay()
 	_build_summary_overlay()
@@ -313,67 +275,12 @@ func _build_ui() -> void:
 
 
 func _build_menu_overlay() -> void:
+	# Kept hidden during normal play so the game starts immediately in Chapter 1!
 	menu_panel = PanelContainer.new()
-	menu_panel.add_theme_stylebox_override(
-		"panel",
-		_make_panel_style(Color(0.13, 0.09, 0.06, 0.94), Color(1.0, 0.84, 0.36, 0.90), 20, 2)
-	)
-	menu_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	menu_panel.position = Vector2(-390, 12)
-	menu_panel.custom_minimum_size = Vector2(780, 126)
+	menu_panel.visible = false
 	ui_layer.add_child(menu_panel)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	menu_panel.add_child(vb)
-
-	var title := Label.new()
-	title.text = "BONJOUR PARIS !  •  L'AVENTURE PARISIENNE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 25)
-	title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.36))
-	title.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 0.95))
-	title.add_theme_constant_override("outline_size", 6)
-	vb.add_child(title)
-
 	menu_stats_lbl = Label.new()
-	menu_stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	menu_stats_lbl.add_theme_font_size_override("font_size", 14)
-	menu_stats_lbl.add_theme_color_override("font_color", Color(0.99, 0.96, 0.88))
-	vb.add_child(menu_stats_lbl)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 10)
-	vb.add_child(btn_row)
-
-	var start_b := Button.new()
-	start_b.text = "▶ Commencer / Play [Space]"
-	start_b.custom_minimum_size = Vector2(215, 34)
-	start_b.add_theme_font_size_override("font_size", 14)
-	start_b.pressed.connect(_on_start_mission_pressed)
-	btn_row.add_child(start_b)
-
-	sector_btn = Button.new()
-	sector_btn.text = "↻ Change Chapter (1/9)"
-	sector_btn.custom_minimum_size = Vector2(185, 34)
-	sector_btn.add_theme_font_size_override("font_size", 13)
-	sector_btn.pressed.connect(_on_cycle_sector)
-	btn_row.add_child(sector_btn)
-
-	var explore_b := Button.new()
-	explore_b.text = "◈ Explore Map [G]"
-	explore_b.custom_minimum_size = Vector2(150, 34)
-	explore_b.add_theme_font_size_override("font_size", 13)
-	explore_b.pressed.connect(_on_enter_gallery_pressed)
-	btn_row.add_child(explore_b)
-
-	var book_b := Button.new()
-	book_b.text = "♪ Word & Phrase Book [Tab]"
-	book_b.custom_minimum_size = Vector2(190, 34)
-	book_b.add_theme_font_size_override("font_size", 13)
-	book_b.pressed.connect(func(): _toggle_lexicon(true))
-	btn_row.add_child(book_b)
+	menu_panel.add_child(menu_stats_lbl)
 
 
 func _build_summary_overlay() -> void:
@@ -588,11 +495,9 @@ func _toggle_lexicon(force_state: Variant = null) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if lexicon_open:
 		hud_root.visible = false
-		menu_panel.visible = false
 		_populate_lexicon_grid()
 	else:
 		hud_root.visible = true
-		menu_panel.visible = (state == GameState.MENU)
 
 
 func _chloe_say(msg: String, voice_file: String = "") -> void:
@@ -608,6 +513,8 @@ func _apply_map_theme(map_idx: int) -> void:
 	if paris_world:
 		paris_world.current_map_bg = str(s_info.get("map_bg", "res://assets/sprites/map_cafe.jpg"))
 		paris_world.queue_redraw()
+	if sector_btn:
+		sector_btn.text = "↻ Chapter (%d/9)" % [_active_map_idx + 1]
 
 
 func _get_sector_item_dicts(sec_idx: int) -> Array[Dictionary]:
@@ -621,50 +528,12 @@ func _get_sector_item_dicts(sec_idx: int) -> Array[Dictionary]:
 
 
 # ==============================================================================
-# STATE TRANSITIONS & 2.5D WORLD FLOW
+# STORY CHAPTER FLOW (NO DEAD MENU, NO YELLOW SPOILERS, CROSSROADS TRANSITIONS)
 # ==============================================================================
 
 func _enter_menu() -> void:
-	state = GameState.MENU
-	prompt_active = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	hud_root.visible = true
-	if _stats_panel:
-		_stats_panel.visible = false
-	radio_panel.visible = false
-	feedback_banner.visible = false
-	menu_panel.visible = true
-	summary_panel.visible = false
-	lexicon_panel.visible = false
-	lexicon_open = false
-
-	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-	_apply_map_theme(act_s)
-	_refresh_menu_labels()
-
-	if paris_world:
-		paris_world.current_mode = "MENU"
-		paris_world.clear_tray()
-		paris_world.exit_gate_open = false
-		paris_world.table_visible = true
-		paris_world.customer_order_ids = []
-		paris_world.player_pos = Vector2(590.0, 565.0)
-		var items := _get_sector_item_dicts(act_s)
-		paris_world.setup_stations_for_items(items, [], true)
-
-	var s_info := VocabData.SECTORS[act_s]
-	_chloe_say(str(s_info.get("chloe_intro", "« Bonjour ! Bienvenue au Café de Flore ! »")), "chloe_welcome_%d.ogg" % act_s)
-
-
-func _refresh_menu_labels() -> void:
-	var st := srs.get_summary_stats()
-	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-	var s_info := VocabData.SECTORS[act_s]
-	menu_stats_lbl.text = "◈ Chapter %d/9 : %s (%s)   •   Words Learned: %d/%d" % [
-		act_s + 1, s_info["name_fr"], s_info["name_en"], st["seen"], st["total_words"]
-	]
-	if sector_btn:
-		sector_btn.text = "↻ Change Chapter (%d/9)" % [act_s + 1]
+	# Starts immediately in active story gameplay (no empty waiting room!)
+	_on_start_mission_pressed()
 
 
 func _on_cycle_sector() -> void:
@@ -674,30 +543,18 @@ func _on_cycle_sector() -> void:
 	srs.sector_filter = next_s
 	srs.save_progress()
 	_apply_map_theme(next_s)
-	_refresh_menu_labels()
-	if paris_world:
-		var items := _get_sector_item_dicts(next_s)
-		paris_world.setup_stations_for_items(items, [], true)
-	var s_info := VocabData.SECTORS[next_s]
-	_chloe_say(str(s_info.get("chloe_intro", "")), "chloe_welcome_%d.ogg" % next_s)
+	_begin_wave()
 
 
 func _on_start_mission_pressed() -> void:
-	audio.play_sfx("click")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	menu_panel.visible = false
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
-	if _stats_panel:
-		_stats_panel.visible = true
-	radio_panel.visible = true
-	feedback_banner.visible = false
-
 	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
 	_apply_map_theme(act_s)
 	shield_hp = 100.0
-	_update_stats_hud()
 	_begin_wave()
 
 
@@ -710,11 +567,6 @@ func _on_enter_gallery_pressed() -> void:
 	summary_panel.visible = false
 	lexicon_panel.visible = false
 	hud_root.visible = true
-	if _stats_panel:
-		_stats_panel.visible = true
-	radio_panel.visible = true
-	feedback_banner.visible = false
-
 	if srs.sector_filter >= 0:
 		gallery_sector = srs.sector_filter
 	else:
@@ -735,14 +587,11 @@ func _load_gallery_sector(sec_idx: int) -> void:
 		paris_world.setup_stations_for_items(items, [], true)
 
 	var s_info := VocabData.SECTORS[gallery_sector]
-	prompt_main_lbl.text = "◈ EXPLORE: %s (%s) — Walk to or press [1–5] on any station to hear its French phrase!" % [
+	prompt_main_lbl.text = "◈ %s (%s) — Walk to any object to hear its spoken French phrase!" % [
 		s_info["name_fr"], s_info["name_en"]
 	]
-	prompt_sub_lbl.visible = true
-	prompt_sub_lbl.text = "Press [1–9] to switch Chapter   •   Walk through the right archway or press [M] to Play!"
 	_update_stats_hud()
-	_chloe_say("« Voici %s ! Approchez-vous d'un objet pour écouter sa phrase. » (Walk up to any item station to hear its spoken French phrase!)" % s_info["name_fr"], "chloe_welcome_%d.ogg" % gallery_sector)
-	timer_bar.value = 100.0
+	_chloe_say("« Voici %s ! Approche-toi d'un objet pour écouter sa phrase, ou passe sous l'arche à droite pour jouer ! »" % s_info["name_fr"], "chloe_welcome_%d.ogg" % gallery_sector)
 
 
 func _begin_wave() -> void:
@@ -754,7 +603,7 @@ func _begin_wave() -> void:
 	if paris_world:
 		paris_world.clear_tray()
 		paris_world.exit_gate_open = false
-		paris_world.player_pos = Vector2(590.0, 560.0)
+		paris_world.player_pos = Vector2(480.0, 485.0)
 	_update_stats_hud()
 	_start_combat_wave()
 
@@ -762,13 +611,12 @@ func _begin_wave() -> void:
 func _start_combat_wave() -> void:
 	state = GameState.COMBAT
 	prompt_in_wave = 0
-	feedback_banner.visible = false
 	_next_combat_prompt()
 
 
 func _next_combat_prompt() -> void:
 	if prompt_in_wave >= PROMPTS_PER_WAVE:
-		_finish_wave()
+		_advance_to_next_chapter()
 		return
 
 	prompt_in_wave += 1
@@ -793,59 +641,41 @@ func _next_combat_prompt() -> void:
 		paris_world.current_mode = "VOCAB"
 		paris_world.table_visible = true
 		var target_id := str(current_spec.get("target_id", "tasse"))
-		var tier := int(current_spec.get("tier", 0))
 		paris_world.customer_order_ids = [target_id]
-		var hi_ids: Array = [target_id] if tier == 0 else []
-		paris_world.setup_stations_for_items(sec_items, hi_ids, tier <= 1)
-
-		var item := VocabData.get_by_id(target_id)
-		if tier == 0:
-			_chloe_say("« Voici %s (%s) ! » — Walk up to [%s] to pick it up, then bring it to the Customer Table!" % [
-				str(item.get("fr_def", "")), str(item.get("en", "")), str(item.get("fr_def", ""))
-			])
-		else:
-			_chloe_say("« %s » (%s) — Pick up %s and serve it at the table!" % [
-				str(item.get("phrase_fr", "")), str(item.get("phrase_en", "")), str(item.get("fr_def", ""))
-			])
+		# NEVER highlight the answer in yellow by default!
+		paris_world.setup_stations_for_items(sec_items, [], false)
 
 	elif ptype == "COMBO":
 		paris_world.current_mode = "COMBO"
 		paris_world.table_visible = true
-		var c_ids: Array[String] = []
+		var c_ids: Array = []
 		for cid in current_spec.get("combo_ids", []):
 			c_ids.append(str(cid))
 		paris_world.customer_order_ids = c_ids
-		paris_world.setup_stations_for_items(sec_items, c_ids, true)
-		_chloe_say("« %s » (%s) — Pick up BOTH items onto your tray, then walk to the Customer Table!" % [
-			str(current_spec.get("prompt_fr", "")), str(current_spec.get("prompt_en", ""))
-		])
+		# NEVER highlight the 2 combo items in yellow by default!
+		paris_world.setup_stations_for_items(sec_items, [], false)
 
 	elif ptype == "DIRECTION":
+		# Step 6: Step out into the Parisian Street Crossroads ('map_carrefour.jpg') to walk to the next chapter!
 		paris_world.current_mode = "DIRECTION"
 		paris_world.table_visible = false
+		paris_world.player_pos = Vector2(640.0, 320.0)
 		_dir_steps.clear()
 		for s in current_spec.get("steps", []):
 			_dir_steps.append(str(s))
 		_dir_step_idx = 0
-		paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx)
-		_chloe_say(str(current_spec.get("chloe_tip", "« Suivez les directions au sol ! » (Walk onto the gold direction checkpoint!)")))
+		# NEVER highlight the street exit in yellow by default!
+		paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx, "")
 
 	elif ptype in ["DAILY_PHRASE", "GRAMMAR"]:
 		paris_world.current_mode = "DAILY_PHRASE"
 		paris_world.table_visible = false
-		var opts: Array[String] = []
+		var opts: Array = []
 		for o in current_spec.get("options", []):
 			opts.append(str(o))
 		opts.shuffle()
 		paris_world.phrase_options = opts
 		paris_world.phrase_highlight_opt = ""
-		if ptype == "DAILY_PHRASE":
-			_chloe_say("« En France (%s) : » %s" % [
-				str(current_spec.get("situation_en", "Everyday Conversation")),
-				str(current_spec.get("chloe_tip", ""))
-			])
-		else:
-			_chloe_say("« Complétez la phrase : » %s" % str(current_spec.get("sub_en", "")))
 
 	_refresh_prompt_hud()
 	_update_stats_hud()
@@ -854,9 +684,11 @@ func _next_combat_prompt() -> void:
 
 func _refresh_prompt_hud() -> void:
 	var ptype := str(current_spec.get("prompt_type", "VOCAB"))
-	var show_en := bool(current_spec.get("show_en_text", true)) or (prompt_hint_stage >= 1)
+	var show_en := bool(current_spec.get("show_en_text", false)) or (prompt_hint_stage >= 1)
 
 	if ptype == "DIRECTION":
+		var next_s := (_active_map_idx + 1) % VocabData.SECTORS.size()
+		var next_name := str(VocabData.SECTORS[next_s]["name_fr"])
 		var parts: Array[String] = []
 		for idx in range(_dir_steps.size()):
 			var d_key: String = _dir_steps[idx]
@@ -864,61 +696,92 @@ func _refresh_prompt_hud() -> void:
 			if idx < _dir_step_idx:
 				parts.append("✓ " + d_fr)
 			elif idx == _dir_step_idx:
-				parts.append("★ " + d_fr.to_upper())
+				parts.append("« " + d_fr + " »")
 			else:
 				parts.append(d_fr)
-		var seq_str := "   →   ".join(parts)
-		prompt_main_lbl.text = "◈ NAVIGATION :  %s" % seq_str
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = "%s   •   Walk onto the GOLD checkpoint with [WASD] or Click!" % str(current_spec.get("prompt_en", ""))
+		var seq_str := "  →  ".join(parts)
+		prompt_main_lbl.text = "En route vers %s :  %s" % [next_name, seq_str]
+		if show_en:
+			var cur_k := str(_dir_steps[_dir_step_idx]) if _dir_step_idx < _dir_steps.size() else "droite"
+			var cur_en := str(VocabData.DIRECTION_INFO[cur_k]["en"])
+			_chloe_say("%s  —  Walk down the %s avenue with [WASD] or Click!" % [str(current_spec.get("chloe_tip", "")), cur_en])
+		else:
+			_chloe_say("« Suis cette direction au carrefour pour rejoindre %s ! »  (Walk down the matching street with [WASD] or Click, or press [H] for English hint)" % next_name)
 		return
 
 	if ptype == "COMBO":
-		prompt_main_lbl.text = "♪ COMBO ORDER :  %s" % str(current_spec.get("prompt_fr", ""))
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = "%s   •   Pick up both items, then walk to the Customer Table!" % str(current_spec.get("prompt_en", ""))
+		prompt_main_lbl.text = "Commande double :  %s" % str(current_spec.get("prompt_fr", ""))
+		if show_en:
+			_chloe_say("« %s »  —  Pick up both items onto your tray, then bring them to the customer!" % str(current_spec.get("sub_en", "")))
+		else:
+			_chloe_say("« Le client commande deux articles ! Prends-les tous les deux sur ton plateau et apporte-les à la table. »  (Press [H] for English hint)")
 		return
 
 	if ptype == "DAILY_PHRASE":
-		prompt_main_lbl.text = "♪ %s" % str(current_spec.get("prompt_fr", ""))
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = "Click, walk onto, or press [1–3] to choose the matching French phrase!"
+		prompt_main_lbl.text = "Conversation :  %s" % str(current_spec.get("prompt_fr", ""))
+		if prompt_hint_stage >= 1:
+			_chloe_say("%s  —  Say: « %s » (%s)" % [
+				str(current_spec.get("chloe_tip", "")),
+				str(current_spec.get("phrase_fr", "")),
+				str(current_spec.get("phrase_en", ""))
+			])
+		else:
+			_chloe_say("« Que dis-tu dans cette situation ? »  (Click one of the 3 French responses above or press [1–3] • Press [H] for a hint)")
 		return
 
 	if ptype == "GRAMMAR":
-		prompt_main_lbl.text = "♪ %s" % str(current_spec.get("prompt_fr", ""))
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = str(current_spec.get("sub_en", ""))
+		prompt_main_lbl.text = "%s" % str(current_spec.get("prompt_fr", ""))
+		_chloe_say(str(current_spec.get("sub_en", "")))
 		return
 
-	# Default VOCAB single-item order
-	prompt_main_lbl.text = "♪ %s" % str(current_spec.get("prompt_fr", ""))
-	if show_en:
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = str(current_spec.get("sub_en", ""))
+	# VOCAB single-item order
+	var target_id := str(current_spec.get("target_id", "tasse"))
+	var item := VocabData.get_by_id(target_id)
+	var tier := int(current_spec.get("tier", 0))
+	prompt_main_lbl.text = "« %s »" % str(item.get("phrase_fr", current_spec.get("prompt_fr", "")))
+	if tier == 0 or show_en:
+		_chloe_say("« Apporte %s (%s) à la table ! »  —  \"%s\"  (Walk with [WASD] or Click to pick it up)" % [
+			str(item.get("fr_def", target_id)),
+			str(item.get("en", "")),
+			str(item.get("phrase_en", ""))
+		])
 	else:
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = "Listen to the order! Walk to the counter station to pick it up, then serve at the table. ([E] Replay • [H] Hint)"
+		_chloe_say("« Écoute la commande du client, prends l'objet correspondant et apporte-le à la table ! »  (Press [H] for English hint)")
+
+
+func _trigger_hint() -> void:
+	if state != GameState.COMBAT or not prompt_active:
+		return
+	audio.play_sfx("click")
+	prompt_used_assist = true
+	prompt_hint_stage = mini(2, prompt_hint_stage + 1)
+	_refresh_prompt_hud()
+
+	var ptype := str(current_spec.get("prompt_type", "VOCAB"))
+	if ptype in ["VOCAB", "COMBO"]:
+		var reqs := paris_world.customer_order_ids
+		if not reqs.is_empty():
+			var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
+			paris_world.setup_stations_for_items(_get_sector_item_dicts(act_s), reqs, true)
+	elif ptype == "DIRECTION":
+		var cur_k := str(_dir_steps[_dir_step_idx]) if _dir_step_idx < _dir_steps.size() else ""
+		paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx, cur_k)
+	elif ptype in ["DAILY_PHRASE", "GRAMMAR"]:
+		paris_world.phrase_highlight_opt = str(current_spec.get("target_id", ""))
 
 
 # ==============================================================================
-# 2.5D WORLD INTERACTION HANDLERS (STATIONS, TABLE, DIRECTIONS, PHRASES, GATE)
+# 2.5D WORLD INTERACTION HANDLERS (STATIONS, TABLE, CROSSROADS, PHRASES)
 # ==============================================================================
 
 func _on_world_station_interacted(vocab_id: String, station_pos: Vector2) -> void:
-	if state == GameState.MENU:
-		_on_start_mission_pressed()
-		return
-
 	if state == GameState.GALLERY:
 		audio.play_sfx("scan", 0.02, -6.5)
 		audio.play_voice("phrase_%s.ogg" % vocab_id)
 		srs.mark_calibrated(vocab_id)
 		var g_item := VocabData.get_by_id(vocab_id)
-		paris_world.spawn_popup(station_pos + Vector2(0, -45), "♪ %s (%s)" % [g_item.get("fr_def", vocab_id), g_item.get("en", "")])
+		paris_world.spawn_popup(station_pos + Vector2(0, -36), "♪ %s (%s)" % [g_item.get("fr_def", vocab_id), g_item.get("en", "")])
 		prompt_main_lbl.text = "♪ %s (%s)  —  « %s »" % [g_item["fr_def"], g_item["en"], g_item.get("phrase_fr", "")]
-		prompt_sub_lbl.visible = true
-		prompt_sub_lbl.text = "%s   •   %s" % [g_item.get("phrase_en", ""), g_item.get("tip", "")]
 		_chloe_say("« %s » (%s) — %s" % [g_item.get("phrase_fr", g_item["fr_def"]), g_item.get("phrase_en", g_item["en"]), g_item["tip"]])
 		return
 
@@ -937,44 +800,30 @@ func _on_world_station_interacted(vocab_id: String, station_pos: Vector2) -> voi
 			paris_world.tray_items.append(vocab_id)
 			audio.play_sfx("scan", 0.02, -6.5)
 			audio.play_voice("word_%s.ogg" % vocab_id)
-			paris_world.spawn_popup(station_pos + Vector2(0, -45), "✓ Picked up %s!" % str(item.get("fr_def", vocab_id)), Color(0.32, 0.98, 0.58))
-			feedback_banner.visible = false
+			paris_world.spawn_popup(station_pos + Vector2(0, -36), "✓ %s" % str(item.get("fr_def", vocab_id)), Color(0.32, 0.98, 0.58))
 
-			# Check if tray now has all requested items
 			var all_ready := true
 			for rid in req_ids:
 				if not paris_world.tray_items.has(str(rid)):
 					all_ready = false
 					break
 			if all_ready:
-				_chloe_say("« Parfait ! Vous avez %s ! Apportez le plateau à la Table de Service (ou appuyez sur [Espace]) ! »" % str(item.get("fr_def", vocab_id)))
+				_chloe_say("« Parfait, tu as %s ! Apporte maintenant le plateau au client (ou appuie sur [Espace]) ! »" % str(item.get("fr_def", vocab_id)))
 			else:
-				_chloe_say("« Bien ! Maintenant, prenez le deuxième article pour compléter la commande ! »")
+				_chloe_say("« Bien ! Tu as %s. Prends maintenant le deuxième article de la commande ! »" % str(item.get("fr_def", vocab_id)))
 	else:
-		# Picked up an item the customer didn't ask for — gentle French + English guidance!
+		# Picked up a wrong item — teach what that item is and gently remind what the customer asked for!
 		prompt_clean_try = false
 		combo = 0
 		audio.play_sfx("hit_err", 0.02, -7.0)
+		audio.play_voice("word_%s.ogg" % vocab_id)
 		if not prompt_wrong_ids.has(vocab_id):
 			prompt_wrong_ids.append(vocab_id)
 		var first_req := str(req_ids[0]) if not req_ids.is_empty() else "tasse"
 		var true_item := VocabData.get_by_id(first_req)
-		paris_world.spawn_popup(station_pos + Vector2(0, -45), "✗ %s (%s)" % [item.get("fr_def", vocab_id), item.get("en", "")], Color(1.0, 0.72, 0.28))
+		paris_world.spawn_popup(station_pos + Vector2(0, -36), "%s (%s)" % [item.get("fr_def", vocab_id), item.get("en", "")], Color(1.0, 0.76, 0.30))
 
-		# Highlight the requested station(s) in gold
-		var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-		var hi_list: Array[String] = []
-		for r in req_ids:
-			hi_list.append(str(r))
-		paris_world.setup_stations_for_items(_get_sector_item_dicts(act_s), hi_list, true)
-
-		_show_feedback(
-			"That counter is %s (%s).  →  ★ Walk to the GOLD station: %s (%s)!" % [
-				item.get("fr_def", vocab_id), item.get("en", ""), true_item.get("fr_def", first_req), true_item.get("en", "")
-			],
-			false
-		)
-		_chloe_say("« Pas de souci ! Ça, c'est %s (%s). Le client voudrait %s (%s) ! »" % [
+		_chloe_say("« Oh, ça c'est %s (%s) ! Le client voudrait %s (%s). »" % [
 			item.get("fr_def", vocab_id), item.get("en", ""), true_item.get("fr_def", first_req), true_item.get("en", "")
 		], "chloe_try_again.ogg")
 		_update_stats_hud()
@@ -1004,13 +853,12 @@ func _on_world_table_interacted(t_pos: Vector2) -> void:
 				missing_id = str(rid)
 				break
 		var m_item := VocabData.get_by_id(missing_id)
-		paris_world.spawn_popup(t_pos + Vector2(0, -48), "Pick up %s first!" % str(m_item.get("fr_def", missing_id)), Color(1.0, 0.86, 0.32))
-		_chloe_say("« Allez d'abord chercher %s (%s) au comptoir en haut ! »" % [str(m_item.get("fr_def", missing_id)), str(m_item.get("en", ""))])
+		paris_world.spawn_popup(t_pos + Vector2(0, -42), "Prends d'abord %s !" % str(m_item.get("fr_def", missing_id)), Color(1.0, 0.86, 0.32))
+		_chloe_say("« Va d'abord prendre %s (%s) avant de servir la table ! »" % [str(m_item.get("fr_def", missing_id)), str(m_item.get("en", ""))])
 		return
 
 	# Order Served Successfully!
 	prompt_active = false
-	feedback_banner.visible = false
 	audio.play_sfx("hit_ok", 0.02, -6.0)
 	var pts := 120
 	if prompt_clean_try:
@@ -1021,19 +869,19 @@ func _on_world_table_interacted(t_pos: Vector2) -> void:
 		pts = 90
 	score += pts
 	paris_world.clear_tray()
-	paris_world.spawn_popup(t_pos + Vector2(0, -55), "+%d ★  Merci beaucoup !" % pts, Color(1.0, 0.90, 0.28))
+	paris_world.spawn_popup(t_pos + Vector2(0, -48), "+%d ★  Merci beaucoup !" % pts, Color(1.0, 0.90, 0.28))
 
 	var bravo_voice := "chloe_bravo_%d.ogg" % ((combo % 3) + 1)
 	if ptype == "COMBO":
 		for cid in req_ids:
 			srs.record_result(str(cid), prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
-		prompt_main_lbl.text = "✓ SERVED : %s   (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])]
+		prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])]
 		_chloe_say("« Magnifique service ! %s »" % str(current_spec["prompt_fr"]), bravo_voice)
 	else:
 		var target_id := str(current_spec["target_id"])
 		srs.record_result(target_id, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 		var t_item := VocabData.get_by_id(target_id)
-		prompt_main_lbl.text = "✓ SERVED : %s (%s)  —  « %s »" % [t_item["fr_def"], t_item["en"], t_item.get("phrase_fr", "")]
+		prompt_main_lbl.text = "✓ %s (%s)  —  « %s »" % [t_item["fr_def"], t_item["en"], t_item.get("phrase_fr", "")]
 		_chloe_say("« Très bien servi ! %s » (%s)" % [t_item.get("phrase_fr", t_item["fr_def"]), t_item.get("phrase_en", t_item["en"])], bravo_voice)
 
 	_update_stats_hud()
@@ -1050,6 +898,20 @@ func _on_world_direction_pad_entered(dir_key: String, pad_pos: Vector2) -> void:
 
 	var expected_key := str(_dir_steps[_dir_step_idx])
 	if dir_key != expected_key:
+		# Walked down the wrong street avenue — bounce back to center of intersection and explain!
+		prompt_clean_try = false
+		combo = 0
+		audio.play_sfx("hit_err", 0.02, -7.0)
+		var walked_info: Dictionary = VocabData.DIRECTION_INFO.get(dir_key, {})
+		var exp_info: Dictionary = VocabData.DIRECTION_INFO.get(expected_key, {})
+		paris_world.spawn_popup(pad_pos, "✗ %s (%s)" % [walked_info.get("fr", dir_key), walked_info.get("en", "")], Color(1.0, 0.72, 0.28))
+		paris_world.player_pos = Vector2(640.0, 320.0)
+		paris_world.player_target_pos = Vector2(-1.0, -1.0)
+		_chloe_say("« Pas par là ! Ça, c'est %s (%s). Il faut aller : %s (%s) ! »" % [
+			walked_info.get("fr", dir_key), walked_info.get("en", ""),
+			exp_info.get("fr", expected_key), exp_info.get("en", "")
+		], "chloe_try_again.ogg")
+		_update_stats_hud()
 		return
 
 	if _dir_step_idx + 1 < _dir_steps.size():
@@ -1058,15 +920,17 @@ func _on_world_direction_pad_entered(dir_key: String, pad_pos: Vector2) -> void:
 		audio.play_sfx("scan", 0.02, -6.5)
 		var next_key := str(_dir_steps[_dir_step_idx])
 		var next_info: Dictionary = VocabData.DIRECTION_INFO[next_key]
-		paris_world.spawn_popup(pad_pos + Vector2(0, -42), "✓ %s!" % str(VocabData.DIRECTION_INFO[dir_key]["fr"]), Color(0.32, 0.98, 0.56))
-		paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx)
+		paris_world.spawn_popup(Vector2(640.0, 260.0), "✓ %s !" % str(VocabData.DIRECTION_INFO[dir_key]["fr"]), Color(0.32, 0.98, 0.56))
+		# Reset player to center of the next street intersection block!
+		paris_world.player_pos = Vector2(640.0, 320.0)
+		paris_world.player_target_pos = Vector2(-1.0, -1.0)
+		paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx, "")
 		audio.play_voice(str(next_info["audio"]))
 		_refresh_prompt_hud()
 		_update_stats_hud()
-		_chloe_say("« Très bien ! Maintenant : %s ! » (%s)" % [str(next_info["fr"]), str(next_info["en"])])
+		_chloe_say("« Très bien ! Au prochain carrefour, va : %s ! »" % str(next_info["fr"]))
 	else:
 		prompt_active = false
-		feedback_banner.visible = false
 		audio.play_sfx("hit_ok", 0.02, -6.0)
 		combo += 1
 		wave_hits_clean += 1
@@ -1074,9 +938,9 @@ func _on_world_direction_pad_entered(dir_key: String, pad_pos: Vector2) -> void:
 		score += pts
 		srs.global_step += 1
 		srs.save_progress()
-		paris_world.spawn_popup(pad_pos + Vector2(0, -46), "+%d ★  Route Complete!" % pts, Color(1.0, 0.90, 0.28))
+		paris_world.spawn_popup(pad_pos, "+%d ★  Arrivée !" % pts, Color(1.0, 0.90, 0.28))
 		prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])]
-		_chloe_say("« Bravo ! %s ! » (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])], "chloe_bravo_%d.ogg" % ((combo % 3) + 1))
+		_chloe_say("« Bravo ! Nous sommes arrivés à la prochaine étape ! »", "chloe_bravo_%d.ogg" % ((combo % 3) + 1))
 		_update_stats_hud()
 		transition_delay = 1.05
 
@@ -1091,13 +955,12 @@ func _on_world_phrase_option_selected(opt_text: String, _idx: int) -> void:
 	var target_opt := str(current_spec.get("target_id", ""))
 	if opt_text == target_opt:
 		prompt_active = false
-		feedback_banner.visible = false
 		audio.play_sfx("hit_ok", 0.02, -6.0)
 		combo += 1
 		wave_hits_clean += 1
 		var pts := 150 + combo * 25
 		score += pts
-		paris_world.spawn_popup(Vector2(640, 310), "+%d ★  « %s »" % [pts, opt_text], Color(0.32, 0.98, 0.58))
+		paris_world.spawn_popup(Vector2(640, 440), "+%d ★  « %s »" % [pts, opt_text], Color(0.32, 0.98, 0.58))
 		var bravo_voice := "chloe_bravo_%d.ogg" % ((combo % 3) + 1)
 
 		if ptype == "DAILY_PHRASE":
@@ -1119,14 +982,13 @@ func _on_world_phrase_option_selected(opt_text: String, _idx: int) -> void:
 		audio.play_sfx("hit_err", 0.02, -7.0)
 		paris_world.phrase_highlight_opt = target_opt
 		_play_slow_assist()
-		_show_feedback("✗ Try the gold-highlighted response: « %s »" % target_opt, false)
-		_chloe_say("« Pas de souci ! Choisissez : %s » (%s)" % [target_opt, str(current_spec.get("phrase_en", ""))], "chloe_try_again.ogg")
+		_chloe_say("« Pas tout à fait ! Ici, on dit : « %s » (%s). »" % [target_opt, str(current_spec.get("phrase_en", ""))], "chloe_try_again.ogg")
 		_update_stats_hud()
 
 
 func _on_world_exit_gate_entered() -> void:
 	if state == GameState.WAVE_SUMMARY:
-		_continue_to_next_round()
+		_advance_to_next_chapter()
 	elif state == GameState.GALLERY:
 		_on_start_mission_pressed()
 
@@ -1140,56 +1002,24 @@ func _play_slow_assist() -> void:
 		audio.play_voice(str(current_spec.get("audio_file", "")), 4.5, 0.85)
 
 
-func _show_feedback(msg: String, is_ok: bool) -> void:
-	feedback_banner.visible = true
-	var border_col := Color(0.42, 0.96, 0.56, 0.95) if is_ok else Color(1.0, 0.82, 0.24, 0.96)
-	var bg_col := Color(0.10, 0.22, 0.12, 0.92) if is_ok else Color(0.24, 0.12, 0.07, 0.92)
-	feedback_banner.add_theme_stylebox_override("panel", _make_panel_style(bg_col, border_col, 14, 2))
-	feedback_lbl.text = msg
-	feedback_lbl.add_theme_color_override("font_color", Color(0.78, 1.0, 0.84) if is_ok else Color(1.0, 0.94, 0.72))
-
-
 func _update_stats_hud() -> void:
 	var s_info := VocabData.SECTORS[clampi(_active_map_idx, 0, 8)]
-	wave_lbl.text = "%s  •  STEP %d/%d" % [String(s_info["name_fr"]).to_upper(), prompt_in_wave, PROMPTS_PER_WAVE]
-	score_lbl.text = "★ %d PTS   (STREAK x%d)" % [score, maxi(1, combo)]
+	wave_lbl.text = "Ch. %d : %s (%d/%d)" % [_active_map_idx + 1, String(s_info["name_fr"]), prompt_in_wave, PROMPTS_PER_WAVE]
+	score_lbl.text = "★ %d" % score
 
 
-func _finish_wave() -> void:
-	state = GameState.WAVE_SUMMARY
-	prompt_active = false
-	feedback_banner.visible = false
-	summary_panel.visible = false
-	hud_root.visible = true
+func _advance_to_next_chapter() -> void:
+	# Seamlessly transition into the next Parisian chapter after completing Step 6's Crossroads walk!
 	audio.play_sfx("wave_up")
-
-	var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-	_apply_map_theme(act_s)
-	radio_panel.visible = true
-	prompt_main_lbl.text = "★ CHAPTER ROUND %d COMPLETE (%d/%d) !   Walk through the Golden Street Archway (→) or Press [Space]!" % [
-		wave_number, wave_hits_clean, PROMPTS_PER_WAVE
-	]
-	prompt_sub_lbl.visible = true
-	prompt_sub_lbl.text = "Walk right to the glowing archway or press [Space] to start Round %d!" % (wave_number + 1)
-	timer_bar.value = 100.0
-
-	if paris_world:
-		paris_world.current_mode = "WAVE_SUMMARY"
-		paris_world.exit_gate_open = true
-		paris_world.exit_gate_label = "★ ROUND %d →" % (wave_number + 1)
-
-	_chloe_say("« Félicitations ! Manche terminée ! On continue ? » (Round %d complete! Walk through the golden archway on the right or press [Space]!)" % wave_number, "chloe_round_done.ogg")
-
-
-func _continue_to_next_round() -> void:
-	audio.play_sfx("click")
-	summary_panel.visible = false
-	hud_root.visible = true
 	wave_number += 1
+	var next_s := (_active_map_idx + 1) % VocabData.SECTORS.size()
+	srs.sector_filter = next_s
+	srs.save_progress()
+	_apply_map_theme(next_s)
 	_begin_wave()
 
 
-## Keyboard convenience: pressing [1]..[5] walks/teleports to station N (or serves if already carrying it)
+## Keyboard convenience: pressing [1]..[5] walks to station N (or selects phrase 1..3)
 func _handle_slot_hotkey(slot_idx: int) -> void:
 	if state == GameState.GALLERY:
 		if slot_idx >= 0 and slot_idx < paris_world.stations.size():
@@ -1207,20 +1037,10 @@ func _handle_slot_hotkey(slot_idx: int) -> void:
 			_on_world_phrase_option_selected(str(paris_world.phrase_options[slot_idx]), slot_idx)
 		return
 
-	if ptype == "DIRECTION":
-		if _dir_step_idx < _dir_steps.size():
-			var cur_key := str(_dir_steps[_dir_step_idx])
-			for cp in paris_world.dir_checkpoints:
-				if str(cp["key"]) == cur_key:
-					paris_world.player_pos = cp["pos"]
-					_on_world_direction_pad_entered(cur_key, cp["pos"])
-					return
-		return
-
 	if slot_idx >= 0 and slot_idx < paris_world.stations.size():
 		var st: Dictionary = paris_world.stations[slot_idx]
 		var vid := str(st["id"])
-		paris_world.player_pos = st["pos"] + Vector2(0, 34)
+		paris_world.player_pos = st["pos"] + Vector2(0, 28)
 		_on_world_station_interacted(vid, st["pos"])
 
 
@@ -1234,13 +1054,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			paris_world.clear_tray()
 		return
 
-	if state == GameState.WAVE_SUMMARY:
-		if event is InputEventKey and event.pressed and not event.echo:
-			if event.physical_keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_1]:
-				_continue_to_next_round()
-				get_viewport().set_input_as_handled()
-				return
-
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var kc: int = event.physical_keycode
@@ -1253,19 +1066,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if kc == KEY_ESCAPE:
 		if lexicon_open:
 			_toggle_lexicon(false)
-		elif state != GameState.MENU:
-			_enter_menu()
-		get_viewport().set_input_as_handled()
+			get_viewport().set_input_as_handled()
 		return
 
 	if lexicon_open:
-		return
-
-	if state == GameState.MENU:
-		if kc in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
-			_on_start_mission_pressed()
-		elif kc == KEY_G:
-			_on_enter_gallery_pressed()
 		return
 
 	if kc == KEY_G and state != GameState.GALLERY:
@@ -1287,21 +1091,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif kc == KEY_Q:
 			paris_world.clear_tray()
 		elif kc == KEY_H:
-			prompt_used_assist = true
-			prompt_hint_stage = mini(2, prompt_hint_stage + 1)
-			_refresh_prompt_hud()
-			var reqs := paris_world.customer_order_ids
-			if not reqs.is_empty():
-				var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-				var hi: Array[String] = []
-				for r in reqs:
-					hi.append(str(r))
-				paris_world.setup_stations_for_items(_get_sector_item_dicts(act_s), hi, true)
+			_trigger_hint()
 		elif kc == KEY_SPACE:
-			if str(current_spec.get("prompt_type", "")) == "DIRECTION":
-				_handle_slot_hotkey(0)
-			else:
-				paris_world.player_pos = paris_world.table_pos + Vector2(0, 42)
+			if str(current_spec.get("prompt_type", "")) in ["VOCAB", "COMBO"]:
+				paris_world.player_pos = paris_world.table_pos + Vector2(0, 36)
 				_on_world_table_interacted(paris_world.table_pos)
 		elif kc >= KEY_1 and kc <= KEY_5:
 			_handle_slot_hotkey(int(kc - KEY_1))
@@ -1312,28 +1105,8 @@ func _process(delta: float) -> void:
 		transition_delay -= delta
 		if transition_delay <= 0.0:
 			if state == GameState.COMBAT:
-				feedback_banner.visible = false
 				_next_combat_prompt()
 		return
-
-	if state == GameState.COMBAT and prompt_active and prompt_clean_try and int(current_spec.get("tier", 0)) >= 1:
-		prompt_timer -= delta
-		timer_bar.value = clampf((prompt_timer / PROMPT_TIME_LIMIT) * 100.0, 0.0, 100.0)
-		if prompt_timer <= 0.0:
-			prompt_clean_try = false
-			combo = 0
-			var reqs := paris_world.customer_order_ids
-			if not reqs.is_empty():
-				var act_s := srs.get_active_campaign_sector() if srs.sector_filter < 0 else clampi(srs.sector_filter, 0, 8)
-				var hi: Array[String] = []
-				for r in reqs:
-					hi.append(str(r))
-				paris_world.setup_stations_for_items(_get_sector_item_dicts(act_s), hi, true)
-			_play_slow_assist()
-			_show_feedback("★ Hint unlocked — walk to the gold-highlighted station and serve at the Customer Table!", false)
-			_update_stats_hud()
-	elif state == GameState.COMBAT and prompt_active and int(current_spec.get("tier", 0)) == 0:
-		timer_bar.value = 100.0
 
 
 # ==============================================================================
@@ -1363,34 +1136,37 @@ func _run_automated_verification() -> void:
 	assert(str(dir_spec["prompt_type"]) == "DIRECTION" and dir_spec["steps"].size() == 2, "Direction sequence spec should have 2 steps")
 	var dp_spec := test_srs.build_daily_phrase_prompt_spec(0, 1)
 	assert(str(dp_spec["prompt_type"]) == "DAILY_PHRASE" and str(dp_spec["target_id"]) == "Excusez-moi, l'addition, s'il vous plaît !", "Everyday phrase spec should match Excusez-moi, l'addition, s'il vous plaît !")
-	print("VERIFY_OK: 2.5D Hand-Painted Parisian Adventure, Bistro Tray Delivery, Combo Orders, Street Directions & Chloé Portrait verified.")
+	print("VERIFY_OK: Uncluttered 2.5D Parisian Story Adventure, Zero Yellow Spoilers, Street Crossroads Navigation & Immediate Start verified.")
 
-	# 1. Title Screen in Au Café de Flore (map_cafe.jpg + 5 illustrated Café stations + Chloé Portrait)
+	# 1. Immediate Opening Scene in Chapter 1 (Au Café de Flore): Natural counter items, zero yellow highlights, single bottom dialogue box
 	srs.reset_progress()
 	srs.sector_filter = 0
-	_enter_menu()
+	_on_start_mission_pressed()
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/01_menu.png")
 
-	# 2. Chapter 1 Step 1 (VOCAB Tier 0 Spotlight) in Au Café de Flore: "la tasse" highlighted in gold + Customer Service Table
-	srs.reset_progress()
-	srs.sector_filter = 0
-	_on_start_mission_pressed()
-	current_spec = srs.build_prompt_spec("tasse")
+	# 2. Chapter 1 Step 2: Picking up "le pain" onto the overhead Bistro Tray & walking to serve the customer
+	paris_world.popups.clear()
+	prompt_in_wave = 2
+	score = 150
+	combo = 1
+	current_spec = srs.build_prompt_spec("pain")
 	paris_world.current_mode = "VOCAB"
 	paris_world.table_visible = true
-	paris_world.customer_order_ids = ["tasse"]
-	paris_world.player_pos = Vector2(310.0, 395.0)
-	var hi_tasse: Array = ["tasse"]
-	paris_world.setup_stations_for_items(_get_sector_item_dicts(0), hi_tasse, true)
+	paris_world.customer_order_ids = ["pain"]
+	paris_world.tray_items = ["pain"]
+	paris_world.player_pos = Vector2(595.0, 405.0)
+	paris_world.spawn_popup(Vector2(605.0, 320.0), "✓ le pain", Color(0.32, 0.98, 0.58))
+	paris_world.setup_stations_for_items(_get_sector_item_dicts(0), [], false)
 	_refresh_prompt_hud()
-	_chloe_say("« Voici la tasse (the cup) ! » — Walk up to [1] la tasse to pick it up, then bring it to the Customer Table!")
+	_update_stats_hud()
+	_chloe_say("« Parfait, tu as le pain ! Apporte maintenant le plateau au client (ou appuie sur [Espace]) ! »")
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/02_calibration_3d.png")
 
-	# 3. 2-Item Combo Order (COMBO) in Au Café de Flore: Player carrying "la tasse" on overhead Bistro Tray & walking to "le pain"
+	# 3. Chapter 1 Step 4 (2-Item Combo Order in French without English/Yellow Spoilers): Carrying la tasse & le pain
 	paris_world.popups.clear()
 	prompt_in_wave = 4
 	score = 390
@@ -1401,68 +1177,71 @@ func _run_automated_verification() -> void:
 	var combo_req: Array = ["tasse", "pain"]
 	paris_world.customer_order_ids = combo_req
 	paris_world.tray_items = ["tasse"]
-	paris_world.player_pos = Vector2(445.0, 335.0)
-	paris_world.spawn_popup(Vector2(215.0, 200.0), "✓ Picked up la tasse!", Color(0.32, 0.98, 0.58))
-	paris_world.setup_stations_for_items(_get_sector_item_dicts(0), combo_req, true)
+	paris_world.player_pos = Vector2(690.0, 425.0)
+	paris_world.setup_stations_for_items(_get_sector_item_dicts(0), [], false)
 	_refresh_prompt_hud()
 	_update_stats_hud()
-	_chloe_say("« Un café et un croissant, s'il vous plaît ! » — Great, you have la tasse on your tray! Now pick up le pain and serve at the table!")
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/03_combat_pure_listening.png")
 
-	# 4. Street Direction Checkpoints (DIRECTION) in Le Marché de Rue (map_marche.jpg)
+	# 4. Step 6: Parisian 4-Way Street Crossroads ('map_carrefour.jpg') — Navigating to the next Chapter with zero floating platform circles!
 	paris_world.popups.clear()
-	srs.sector_filter = 2
-	prompt_in_wave = 5
+	srs.sector_filter = 1
+	prompt_in_wave = 6
 	score = 620
 	combo = 4
-	_apply_map_theme(2)
-	current_spec = srs.build_direction_prompt_spec(2, 5)
-	_dir_steps = ["gauche", "haut"]
-	_dir_step_idx = 1
+	_apply_map_theme(1)
+	current_spec = srs.build_direction_prompt_spec(2, 4)
+	_dir_steps = ["haut", "droite"]
+	_dir_step_idx = 0
 	paris_world.current_mode = "DIRECTION"
 	paris_world.table_visible = false
 	paris_world.clear_tray()
-	paris_world.player_pos = Vector2(485.0, 395.0)
-	paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx)
-	paris_world.spawn_popup(Vector2(280.0, 400.0), "✓ À gauche!", Color(0.32, 0.98, 0.58))
+	paris_world.player_pos = Vector2(640.0, 320.0)
+	paris_world.setup_direction_checkpoints(_dir_steps, _dir_step_idx, "")
 	_refresh_prompt_hud()
 	_update_stats_hud()
-	_chloe_say("« Très bien ! Maintenant : en haut ! » (Great! Now walk onto the gold checkpoint: En haut!)")
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/06_a2_spatial_modifiers.png")
 
-	# 5. Real-Life Conversation (DAILY_PHRASE) in La Gare du Nord (map_gare.jpg)
+	# 5. Step 5: Real-Life Conversation in La Gare du Nord (map_gare.jpg) — Clean response buttons above dialogue bar, zero yellow spoiler
 	paris_world.popups.clear()
 	srs.sector_filter = 3
-	prompt_in_wave = 6
+	prompt_in_wave = 5
 	score = 840
 	combo = 5
 	_apply_map_theme(3)
 	current_spec = srs.build_daily_phrase_prompt_spec(3, -1)
 	paris_world.current_mode = "DAILY_PHRASE"
 	paris_world.table_visible = false
-	var dp_opts: Array[String] = []
+	var dp_opts: Array = []
 	for o in current_spec.get("options", []):
 		dp_opts.append(str(o))
 	paris_world.phrase_options = dp_opts
-	paris_world.phrase_highlight_opt = str(current_spec.get("target_id", ""))
-	paris_world.player_pos = Vector2(640.0, 510.0)
+	paris_world.phrase_highlight_opt = ""
+	paris_world.player_pos = Vector2(640.0, 445.0)
 	_refresh_prompt_hud()
 	_update_stats_hud()
-	_chloe_say("« En France (%s) : » %s" % [str(current_spec.get("situation_en", "")), str(current_spec.get("chloe_tip", ""))])
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/07_b1_grammar_breach.png")
 
-	# 6. Interactive Map Explorer (GALLERY) in La Maison Parisienne (map_maison.jpg)
+	# 6. Chapter 2: La Maison Parisienne (map_maison.jpg) — Natural apartment item placement (book on armchair, key on mantel, chair, bed, lamp)
 	paris_world.popups.clear()
-	_on_enter_gallery_pressed()
-	_load_gallery_sector(1)
-	paris_world.player_pos = Vector2(402.0, 315.0)
-	_on_world_station_interacted("livre", Vector2(402.0, 232.0))
+	srs.sector_filter = 1
+	prompt_in_wave = 1
+	_apply_map_theme(1)
+	current_spec = srs.build_prompt_spec("cle")
+	paris_world.current_mode = "VOCAB"
+	paris_world.table_visible = true
+	paris_world.customer_order_ids = ["cle"]
+	paris_world.clear_tray()
+	paris_world.player_pos = Vector2(410.0, 380.0)
+	paris_world.setup_stations_for_items(_get_sector_item_dicts(1), [], false)
+	_refresh_prompt_hud()
+	_update_stats_hud()
 	for i in range(6):
 		await get_tree().process_frame
 	await _save_viewport_png(out_dir + "/05_gallery_study.png")

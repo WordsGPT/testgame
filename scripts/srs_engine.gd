@@ -8,7 +8,7 @@ extends RefCounted
 ## - Tier 2 (Pure Audio — Listen & Shoot): Audio-only! Player identifies the spoken French word by ear alone.
 ## - Tier 3–4 (Mastery — Riddles, Negative Traps, A2 3D Modifiers & B1 Dialogues/Grammar).
 
-const SAVE_PATH := "user://bonjour_paris_v5.json"
+const SAVE_PATH := "user://bonjour_paris_v6.json"
 const MAX_WORKING_SET := 5
 
 var global_step: int = 0
@@ -540,17 +540,14 @@ func build_combo_prompt_spec(active_sector: int = 0) -> Dictionary:
 		"slow_audio_file": "",
 		"prompt_fr": "« %s »" % str(s_info.get("combo_fr", "Une tasse de café et du pain, s'il vous plaît !")),
 		"prompt_en": str(s_info.get("combo_en", "A cup of coffee and some bread, please!")),
-		"sub_en": "\"%s\"   •   Grab BOTH: %s (%s) + %s (%s)!" % [
+		"sub_en": "%s  =  %s (%s) + %s (%s)" % [
 			str(s_info.get("combo_en", "")),
 			str(it1.get("fr_def", c_ids[0])), str(it1.get("en", "")),
 			str(it2.get("fr_def", c_ids[1])), str(it2.get("en", "")),
 		],
-		"chloe_tip": "« %s » (%s) — Prends les 2 objets sur ton plateau et apporte-les à la table !" % [
-			str(s_info.get("combo_fr", "")),
-			str(s_info.get("combo_en", ""))
-		],
+		"chloe_tip": "« %s » — Prends ces 2 objets et apporte-les !" % str(s_info.get("combo_fr", "")),
 		"show_fr_text": true,
-		"show_en_text": true,
+		"show_en_text": (l1_mode == 1),
 		"required_decoy": "",
 	}
 
@@ -565,20 +562,34 @@ func build_wave_prompt_spec(prompt_in_wave: int, current_wave: int = 1) -> Dicti
 		return build_grammar_prompt_spec()
 
 	var effective_sec := get_active_campaign_sector() if sector_filter == -1 else clampi(sector_filter, 0, 8)
-	var dir_lvl := clampi(1 + effective_sec + (current_wave - 1), 1, 3)
+	var s_info: Dictionary = VocabData.SECTORS[effective_sec]
+	var c_ids: Array = s_info.get("combo_ids", ["tasse", "pain"])
+	var dir_lvl := clampi(1 + effective_sec, 1, 3)
 
-	# Step 4 of every chapter: 2-Item Combo Order (Carry 2 items on your tray & serve!)
+	# Step 1 & Step 2: Ensure the 2 combo items of this chapter are taught/practiced first!
+	if prompt_in_wave == 1 and c_ids.size() >= 1:
+		var cid0 := str(c_ids[0])
+		if cards.has(cid0) and not bool(cards[cid0]["seen"]):
+			mark_calibrated(cid0)
+			return build_prompt_spec(cid0)
+	elif prompt_in_wave == 2 and c_ids.size() >= 2:
+		var cid1 := str(c_ids[1])
+		if cards.has(cid1) and not bool(cards[cid1]["seen"]):
+			mark_calibrated(cid1)
+			return build_prompt_spec(cid1)
+
+	# Step 4 of every chapter: 2-Item Combo Order (Recall the 2 items in French without yellow spoilers!)
 	if prompt_in_wave == 4:
 		return build_combo_prompt_spec(effective_sec)
 
-	# Step 5 of every chapter: Physical Street Directional Navigation (1-step -> 2-step -> 3-step sequences!)
+	# Step 5 of every chapter: Real Day-to-Day Conversational Phrase before leaving the location!
 	if prompt_in_wave == 5:
-		var step5_lvl := 1 if (effective_sec == 0 and current_wave == 1) else clampi(dir_lvl, 2, 3)
-		return build_direction_prompt_spec(step5_lvl)
-
-	# Step 6 (Chapter Finale): Real Day-to-Day Conversational Phrase Exchange!
-	if prompt_in_wave == 6:
 		return build_daily_phrase_prompt_spec(effective_sec)
+
+	# Step 6 (Chapter Finale): Step out into the Parisian Street Crossroads to walk to the next location!
+	if prompt_in_wave == 6:
+		var step6_lvl := 1 if (effective_sec == 0 and current_wave == 1) else clampi(dir_lvl, 2, 3)
+		return build_direction_prompt_spec(step6_lvl)
 
 	var target_id := select_next_target()
 	return build_prompt_spec(target_id)
