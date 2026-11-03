@@ -9,14 +9,11 @@
       <stop offset="100%" stop-color="#C89228"/>
     </linearGradient>
   </defs>
-  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
-  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
-  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
-  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
-  
-      <path d="M64 36 C64 26 70 22 74 20" fill="none" stroke="#633D1A" stroke-width="4.5" stroke-linecap="round"/>
+  <ellipse cx="64" cy="98" rx="34" ry="10" fill="#120D08" fill-opacity="0.38"/>
+  <g id="item_art" transform="translate(64,62) scale(1.22) translate(-64,-64)">
+    <path d="M64 36 C64 26 70 22 74 20" fill="none" stroke="#633D1A" stroke-width="4.5" stroke-linecap="round"/>
       <path d="M65 30 C76 22 88 26 84 36 C78 40 68 36 65 30 Z" fill="#52AD3A" stroke="#29661B" stroke-width="3"/>
       <path d="M64 40 C48 34 32 46 34 66 C36 86 50 96 64 90 C78 96 92 86 94 66 C96 46 80 34 64 40 Z" fill="#E33935" stroke="#7D1816" stroke-width="3.5"/>
       <path d="M44 52 C41 60 42 70 46 76" fill="none" stroke="#FF9E9B" stroke-width="4" stroke-linecap="round"/>
-    
+  </g>
 </svg>

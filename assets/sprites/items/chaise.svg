@@ -9,12 +9,9 @@
       <stop offset="100%" stop-color="#C89228"/>
     </linearGradient>
   </defs>
-  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
-  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
-  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
-  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
-  
-      <path d="M44 28 L80 28 L80 62 L44 62 Z" fill="#D48846" stroke="#6B3C14" stroke-width="3.5"/>
+  <ellipse cx="64" cy="98" rx="34" ry="10" fill="#120D08" fill-opacity="0.38"/>
+  <g id="item_art" transform="translate(64,62) scale(1.22) translate(-64,-64)">
+    <path d="M44 28 L80 28 L80 62 L44 62 Z" fill="#D48846" stroke="#6B3C14" stroke-width="3.5"/>
       <line x1="54" y1="28" x2="54" y2="62" stroke="#6B3C14" stroke-width="3"/>
       <line x1="70" y1="28" x2="70" y2="62" stroke="#6B3C14" stroke-width="3"/>
       <rect x="38" y="60" width="52" height="10" rx="4" fill="#E89D58" stroke="#6B3C14" stroke-width="3.5"/>
@@ -22,5 +19,5 @@
       <line x1="84" y1="70" x2="88" y2="98" stroke="#6B3C14" stroke-width="5" stroke-linecap="round"/>
       <line x1="52" y1="70" x2="52" y2="94" stroke="#6B3C14" stroke-width="4" stroke-linecap="round"/>
       <line x1="76" y1="70" x2="76" y2="94" stroke="#6B3C14" stroke-width="4" stroke-linecap="round"/>
-    
+  </g>
 </svg>

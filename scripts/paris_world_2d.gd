@@ -401,25 +401,23 @@ func _draw_station(st: Dictionary) -> void:
 	var is_near := (player_pos.distance_to(pos) < 82.0) or (_hover_pos.distance_to(pos) < 42.0)
 	var pulse := sin(_anim_time * 5.0) * 0.5 + 0.5
 
-	# Soft natural contact shadow on the counter/floor (no giant white circle plate!)
-	draw_circle(pos + Vector2(0.0, 16.0), 24.0, Color(0.06, 0.04, 0.02, 0.34))
+	# Subtle contact shadow on the counter/floor (no white circle plate!)
+	draw_circle(pos + Vector2(0.0, 18.0), 18.0, Color(0.06, 0.04, 0.02, 0.18))
 
-	# Only show a helper ring if the player explicitly requested a hint ([H]), made a mistake, or already picked it up
+	# Only show a helper ring if the player explicitly requested a hint ([H]) or already picked it up
 	if is_hi:
 		draw_arc(pos, 34.0 + pulse * 4.0, 0.0, TAU, 36, Color(1.0, 0.86, 0.22, 0.92), 3.5, true)
 	elif in_tray:
 		draw_arc(pos, 31.0, 0.0, TAU, 32, Color(0.28, 0.94, 0.56, 0.85), 3.0, true)
-	elif is_near:
-		draw_arc(pos, 30.0, 0.0, TAU, 32, Color(1.0, 0.96, 0.82, 0.65), 2.0, true)
 
-	# Proportional 56x56 Item Sprite sitting naturally in the scene
+	# Proportional 62x62 Item Sprite sitting naturally in the scene with transparent background
 	var itex := get_item_tex(vid)
 	if itex:
-		var sz := Vector2(56.0, 56.0)
+		var sz := Vector2(62.0, 62.0)
 		var hover_lift := -3.0 if is_near else 0.0
 		draw_texture_rect(itex, Rect2(pos - sz * 0.5 + Vector2(0.0, hover_lift), sz), false)
 
-	# Only show a small label in GALLERY mode, when hinted (is_hi), or when hovering/walking right next to it
+	# Only show a small label in GALLERY mode or when hinted (is_hi)
 	if current_mode == "GALLERY" or is_hi:
 		var lbl_w := 136.0
 		var lbl_r := Rect2(pos.x - lbl_w * 0.5, pos.y + 28.0, lbl_w, 24.0)
@@ -432,24 +430,21 @@ func _draw_customer_table() -> void:
 	var pulse := sin(_anim_time * 4.5) * 0.5 + 0.5
 	var ready_to_serve := (not customer_order_ids.is_empty()) and (tray_items.size() >= customer_order_ids.size())
 
-	# Soft shadow under customer
-	draw_circle(table_pos + Vector2(0.0, 22.0), 28.0, Color(0.08, 0.05, 0.03, 0.34))
-
-	# Only pulse a delivery ring when the player has collected all items for the order!
+	# Only pulse a delivery ring when the player has collected all items to bring to Chloé!
 	if ready_to_serve:
 		draw_arc(table_pos + Vector2(0.0, 8.0), 38.0 + pulse * 5.0, 0.0, TAU, 40, Color(0.30, 0.96, 0.56, 0.90), 3.5, true)
 
 	if customer_tex:
-		draw_texture_rect(customer_tex, Rect2(table_pos - Vector2(36.0, 44.0), Vector2(72.0, 84.0)), false)
+		draw_texture_rect(customer_tex, Rect2(table_pos - Vector2(38.0, 52.0), Vector2(76.0, 88.0)), false)
 
-	# Small, clean speech indicator above the customer (NO item picture spoiling the answer!)
-	var tag_w := 148.0 if ready_to_serve else 104.0
-	var tag_r := Rect2(table_pos.x - tag_w * 0.5, table_pos.y - 68.0, tag_w, 24.0)
-	var border_c := Color(0.32, 0.96, 0.56) if ready_to_serve else Color(0.95, 0.82, 0.42, 0.80)
-	_draw_pill(tag_r, Color(0.12, 0.09, 0.07, 0.88), border_c, 1.5, 8.0)
+	# Small, clean indicator above Chloé (NO item picture spoiling the answer!)
+	var tag_w := 158.0 if ready_to_serve else 76.0
+	var tag_r := Rect2(table_pos.x - tag_w * 0.5, table_pos.y - 74.0, tag_w, 22.0)
+	var border_c := Color(0.32, 0.96, 0.56) if ready_to_serve else Color(0.88, 0.74, 0.44, 0.72)
+	_draw_pill(tag_r, Color(0.12, 0.09, 0.07, 0.84), border_c, 1.5, 8.0)
 	if font_res:
-		var t_str := "★ Serve Here [Space]" if ready_to_serve else "★ Commande"
-		draw_string(font_res, Vector2(tag_r.position.x, tag_r.position.y + 16.0), t_str, HORIZONTAL_ALIGNMENT_CENTER, tag_w, 12, Color(1.0, 0.97, 0.88))
+		var t_str := "★ Give to Chloé [Space]" if ready_to_serve else "Chloé"
+		draw_string(font_res, Vector2(tag_r.position.x, tag_r.position.y + 15.0), t_str, HORIZONTAL_ALIGNMENT_CENTER, tag_w, 12, Color(1.0, 0.97, 0.88))
 
 
 func _draw_direction_checkpoints() -> void:
@@ -502,19 +497,15 @@ func _draw_player() -> void:
 	var bob := sin(player_walk_phase) * 3.0 if player_vel.length_squared() > 4.0 else sin(_anim_time * 2.5) * 1.2
 	var draw_p := player_pos + Vector2(0.0, bob)
 
-	# Subtle ground shadow under player
-	draw_circle(player_pos + Vector2(0.0, 12.0), 20.0, Color(0.06, 0.04, 0.02, 0.34))
-	draw_arc(player_pos + Vector2(0.0, 12.0), 22.0, 0.0, TAU, 28, Color(1.0, 0.90, 0.42, 0.70), 2.0, true)
-
 	if player_tex:
-		var sz := Vector2(68.0, 78.0)
+		var sz := Vector2(76.0, 88.0)
 		draw_texture_rect(player_tex, Rect2(draw_p - Vector2(sz.x * 0.5, sz.y * 0.78), sz), false)
 	else:
 		draw_circle(draw_p, 22.0, Color(0.25, 0.55, 0.95))
 
 	# Draw Overhead Carry Tray if holding items!
 	if not tray_items.is_empty():
-		var tray_center := draw_p + Vector2(0.0, -74.0)
+		var tray_center := draw_p + Vector2(0.0, -82.0)
 		var tray_w := 48.0 + float(tray_items.size() - 1) * 38.0
 		var tray_r := Rect2(tray_center.x - tray_w * 0.5, tray_center.y - 20.0, tray_w, 40.0)
 		_draw_pill(tray_r, Color(0.16, 0.11, 0.06, 0.94), Color(1.0, 0.86, 0.28), 2.0, 12.0)

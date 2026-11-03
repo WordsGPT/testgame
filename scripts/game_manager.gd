@@ -710,11 +710,13 @@ func _refresh_prompt_hud() -> void:
 		return
 
 	if ptype == "COMBO":
-		prompt_main_lbl.text = "Commande double :  %s" % str(current_spec.get("prompt_fr", ""))
+		prompt_main_lbl.text = "En duo :  %s" % str(current_spec.get("prompt_fr", ""))
 		if show_en:
-			_chloe_say("« %s »  —  Pick up both items onto your tray, then bring them to the customer!" % str(current_spec.get("sub_en", "")))
+			_chloe_say("« %s »  —  Walk to both items in the scene!" % str(current_spec.get("sub_en", "")))
+		elif _active_map_idx == 0:
+			_chloe_say("« Je voudrais ces deux articles ! Prends-les tous les deux et apporte-les-moi à la table. »  (Press [H] for English hint)")
 		else:
-			_chloe_say("« Le client commande deux articles ! Prends-les tous les deux sur ton plateau et apporte-les à la table. »  (Press [H] for English hint)")
+			_chloe_say("« Trouve ces deux éléments dans la scène ! »  (Walk to both items with [WASD] or Click • Press [H] for English hint)")
 		return
 
 	if ptype == "DAILY_PHRASE":
@@ -734,19 +736,29 @@ func _refresh_prompt_hud() -> void:
 		_chloe_say(str(current_spec.get("sub_en", "")))
 		return
 
-	# VOCAB single-item order
+	# VOCAB single-item step:
+	# Steps 1 & 2 introduce new words (tier == 0); Step 3 tests in pure French without English spoiler unless [H] is pressed!
 	var target_id := str(current_spec.get("target_id", "tasse"))
 	var item := VocabData.get_by_id(target_id)
 	var tier := int(current_spec.get("tier", 0))
+	var teach_mode := (tier == 0 and prompt_in_wave <= 2) or show_en
 	prompt_main_lbl.text = "« %s »" % str(item.get("phrase_fr", current_spec.get("prompt_fr", "")))
-	if tier == 0 or show_en:
-		_chloe_say("« Apporte %s (%s) à la table ! »  —  \"%s\"  (Walk with [WASD] or Click to pick it up)" % [
-			str(item.get("fr_def", target_id)),
-			str(item.get("en", "")),
-			str(item.get("phrase_en", ""))
-		])
+	if teach_mode:
+		if _active_map_idx == 0:
+			_chloe_say("« Nouveau mot : %s = %s ! Apporte-le-moi à la table. »  (Walk with [WASD] or Click)" % [
+				str(item.get("fr_def", target_id)),
+				str(item.get("en", ""))
+			])
+		else:
+			_chloe_say("« Nouveau mot : %s = %s ! Va vers cet objet dans la scène. »  (Walk with [WASD] or Click)" % [
+				str(item.get("fr_def", target_id)),
+				str(item.get("en", ""))
+			])
 	else:
-		_chloe_say("« Écoute la commande du client, prends l'objet correspondant et apporte-le à la table ! »  (Press [H] for English hint)")
+		if _active_map_idx == 0:
+			_chloe_say("« Écoute bien ma demande en français et apporte l'objet à la table ! »  (Press [H] for English hint)")
+		else:
+			_chloe_say("« Écoute la phrase en français et dirige-toi vers le bon objet dans la scène ! »  (Press [H] for English hint)")
 
 
 func _trigger_hint() -> void:
@@ -808,11 +820,15 @@ func _on_world_station_interacted(vocab_id: String, station_pos: Vector2) -> voi
 					all_ready = false
 					break
 			if all_ready:
-				_chloe_say("« Parfait, tu as %s ! Apporte maintenant le plateau au client (ou appuie sur [Espace]) ! »" % str(item.get("fr_def", vocab_id)))
+				if _active_map_idx == 0:
+					_chloe_say("« Parfait, tu as %s ! Apporte-le-moi à la table (ou appuie sur [Espace]) ! »" % str(item.get("fr_def", vocab_id)))
+				else:
+					# In apartment, market, station, and park chapters, interacting with the object(s) completes on the spot!
+					_complete_item_order(station_pos)
 			else:
-				_chloe_say("« Bien ! Tu as %s. Prends maintenant le deuxième article de la commande ! »" % str(item.get("fr_def", vocab_id)))
+				_chloe_say("« Bien (1/2) : %s ! Trouve maintenant le deuxième élément ! »" % str(item.get("fr_def", vocab_id)))
 	else:
-		# Picked up a wrong item — teach what that item is and gently remind what the customer asked for!
+		# Interacted with a wrong item — teach what that item is and gently remind what was requested!
 		prompt_clean_try = false
 		combo = 0
 		audio.play_sfx("hit_err", 0.02, -7.0)
@@ -823,7 +839,7 @@ func _on_world_station_interacted(vocab_id: String, station_pos: Vector2) -> voi
 		var true_item := VocabData.get_by_id(first_req)
 		paris_world.spawn_popup(station_pos + Vector2(0, -36), "%s (%s)" % [item.get("fr_def", vocab_id), item.get("en", "")], Color(1.0, 0.76, 0.30))
 
-		_chloe_say("« Oh, ça c'est %s (%s) ! Le client voudrait %s (%s). »" % [
+		_chloe_say("« Oh, ça c'est %s (%s) ! Je cherche %s (%s). »" % [
 			item.get("fr_def", vocab_id), item.get("en", ""), true_item.get("fr_def", first_req), true_item.get("en", "")
 		], "chloe_try_again.ogg")
 		_update_stats_hud()
@@ -853,11 +869,16 @@ func _on_world_table_interacted(t_pos: Vector2) -> void:
 				missing_id = str(rid)
 				break
 		var m_item := VocabData.get_by_id(missing_id)
-		paris_world.spawn_popup(t_pos + Vector2(0, -42), "Prends d'abord %s !" % str(m_item.get("fr_def", missing_id)), Color(1.0, 0.86, 0.32))
-		_chloe_say("« Va d'abord prendre %s (%s) avant de servir la table ! »" % [str(m_item.get("fr_def", missing_id)), str(m_item.get("en", ""))])
+		paris_world.spawn_popup(t_pos + Vector2(0, -42), "Cherche d'abord %s !" % str(m_item.get("fr_def", missing_id)), Color(1.0, 0.86, 0.32))
+		_chloe_say("« Va d'abord chercher %s (%s) ! »" % [str(m_item.get("fr_def", missing_id)), str(m_item.get("en", ""))])
 		return
 
-	# Order Served Successfully!
+	_complete_item_order(t_pos)
+
+
+func _complete_item_order(pos: Vector2) -> void:
+	var ptype := str(current_spec.get("prompt_type", "VOCAB"))
+	var req_ids: Array = paris_world.customer_order_ids
 	prompt_active = false
 	audio.play_sfx("hit_ok", 0.02, -6.0)
 	var pts := 120
@@ -869,20 +890,20 @@ func _on_world_table_interacted(t_pos: Vector2) -> void:
 		pts = 90
 	score += pts
 	paris_world.clear_tray()
-	paris_world.spawn_popup(t_pos + Vector2(0, -48), "+%d ★  Merci beaucoup !" % pts, Color(1.0, 0.90, 0.28))
+	paris_world.spawn_popup(pos + Vector2(0, -48), "+%d ★  Merci beaucoup !" % pts, Color(1.0, 0.90, 0.28))
 
 	var bravo_voice := "chloe_bravo_%d.ogg" % ((combo % 3) + 1)
 	if ptype == "COMBO":
 		for cid in req_ids:
 			srs.record_result(str(cid), prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 		prompt_main_lbl.text = "✓ %s   (%s)" % [str(current_spec["prompt_fr"]), str(current_spec["prompt_en"])]
-		_chloe_say("« Magnifique service ! %s »" % str(current_spec["prompt_fr"]), bravo_voice)
+		_chloe_say("« Magnifique ! %s »" % str(current_spec["prompt_fr"]), bravo_voice)
 	else:
 		var target_id := str(current_spec["target_id"])
 		srs.record_result(target_id, prompt_clean_try, prompt_used_assist, prompt_wrong_ids)
 		var t_item := VocabData.get_by_id(target_id)
 		prompt_main_lbl.text = "✓ %s (%s)  —  « %s »" % [t_item["fr_def"], t_item["en"], t_item.get("phrase_fr", "")]
-		_chloe_say("« Très bien servi ! %s » (%s)" % [t_item.get("phrase_fr", t_item["fr_def"]), t_item.get("phrase_en", t_item["en"])], bravo_voice)
+		_chloe_say("« Très bien ! %s » (%s)" % [t_item.get("phrase_fr", t_item["fr_def"]), t_item.get("phrase_en", t_item["en"])], bravo_voice)
 
 	_update_stats_hud()
 	transition_delay = 1.05

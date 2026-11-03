@@ -9,13 +9,10 @@
       <stop offset="100%" stop-color="#C89228"/>
     </linearGradient>
   </defs>
-  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
-  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
-  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
-  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
-  
-      <rect x="34" y="34" width="60" height="40" rx="4" fill="#323C4D" stroke="#1A2029" stroke-width="3.5"/>
+  <ellipse cx="64" cy="98" rx="34" ry="10" fill="#120D08" fill-opacity="0.38"/>
+  <g id="item_art" transform="translate(64,62) scale(1.22) translate(-64,-64)">
+    <rect x="34" y="34" width="60" height="40" rx="4" fill="#323C4D" stroke="#1A2029" stroke-width="3.5"/>
       <rect x="39" y="39" width="50" height="30" fill="#70B5F9"/>
       <polygon points="24,88 104,88 94,74 34,74" fill="#C4CEDB" stroke="#323C4D" stroke-width="3.5" stroke-linejoin="round"/>
-    
+  </g>
 </svg>

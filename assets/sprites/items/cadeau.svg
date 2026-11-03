@@ -9,15 +9,12 @@
       <stop offset="100%" stop-color="#C89228"/>
     </linearGradient>
   </defs>
-  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
-  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
-  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
-  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
-  
-      <rect x="34" y="50" width="60" height="44" rx="4" fill="#E64545" stroke="#7A1818" stroke-width="3.5"/>
+  <ellipse cx="64" cy="98" rx="34" ry="10" fill="#120D08" fill-opacity="0.38"/>
+  <g id="item_art" transform="translate(64,62) scale(1.22) translate(-64,-64)">
+    <rect x="34" y="50" width="60" height="44" rx="4" fill="#E64545" stroke="#7A1818" stroke-width="3.5"/>
       <rect x="30" y="40" width="68" height="14" rx="4" fill="#F25757" stroke="#7A1818" stroke-width="3.5"/>
       <rect x="58" y="40" width="12" height="54" fill="#FFD447" stroke="#8C650B" stroke-width="2.5"/>
       <rect x="34" y="64" width="60" height="10" fill="#FFD447" stroke="#8C650B" stroke-width="2.5"/>
       <path d="M64 40 C48 22 38 36 56 40 M64 40 C80 22 90 36 72 40" fill="none" stroke="#FFD447" stroke-width="5" stroke-linecap="round"/>
-    
+  </g>
 </svg>

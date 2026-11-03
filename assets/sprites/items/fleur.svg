@@ -9,12 +9,9 @@
       <stop offset="100%" stop-color="#C89228"/>
     </linearGradient>
   </defs>
-  <circle cx="64" cy="67" r="54" fill="#18120C" fill-opacity="0.32"/>
-  <circle cx="64" cy="63" r="54" fill="url(#rim)"/>
-  <circle cx="64" cy="63" r="49" fill="url(#bg)"/>
-  <circle cx="64" cy="63" r="45" fill="none" stroke="#FFF8E8" stroke-opacity="0.35" stroke-width="2"/>
-  
-      <path d="M64 64 L64 98" stroke="#3B8A3E" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="64" cy="98" rx="34" ry="10" fill="#120D08" fill-opacity="0.38"/>
+  <g id="item_art" transform="translate(64,62) scale(1.22) translate(-64,-64)">
+    <path d="M64 64 L64 98" stroke="#3B8A3E" stroke-width="5" stroke-linecap="round"/>
       <path d="M64 82 C76 76 82 82 74 90 C68 92 64 86 64 82 Z" fill="#4EB052" stroke="#245926" stroke-width="2.5"/>
       <circle cx="64" cy="36" r="12" fill="#F25C84" stroke="#8C2341" stroke-width="2.5"/>
       <circle cx="82" cy="48" r="12" fill="#F25C84" stroke="#8C2341" stroke-width="2.5"/>
@@ -22,5 +19,5 @@
       <circle cx="53" cy="68" r="12" fill="#F25C84" stroke="#8C2341" stroke-width="2.5"/>
       <circle cx="46" cy="48" r="12" fill="#F25C84" stroke="#8C2341" stroke-width="2.5"/>
       <circle cx="64" cy="53" r="11" fill="#FFD43B" stroke="#8C620A" stroke-width="2.5"/>
-    
+  </g>
 </svg>

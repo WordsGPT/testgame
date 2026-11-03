@@ -1913,8 +1913,8 @@ const DAILY_PHRASES: Array[Dictionary] = [
 		"id": "conv_10",
 		"sector": 3,
 		"audio": "conv_10.ogg",
-		"situation_en": "You ask how to get to the station, and a local replies: « C'est tout droit, puis à gauche ! »",
-		"heard_fr": "« Pour aller à la gare ? »",
+		"situation_en": "A traveler asks you for directions to the station — how do you say 'It's straight ahead, then to the left!'?",
+		"heard_fr": "« Excusez-moi, pour aller à la gare ? »",
 		"phrase_fr": "C'est tout droit, puis à gauche !",
 		"phrase_en": "It's straight ahead, then to the left!",
 		"options": [
@@ -1922,7 +1922,7 @@ const DAILY_PHRASES: Array[Dictionary] = [
 			"Je voudrais un café chaud.",
 			"Parlez-vous anglais ?",
 		],
-		"chloe_tip": "When asking street directions, listen for « tout droit » (straight ahead), « à gauche » (left), and « à droite » (right)!",
+		"chloe_tip": "When giving or hearing street directions, listen for « tout droit » (straight ahead), « à gauche » (left), and « à droite » (right)!",
 	},
 	{
 		"id": "conv_11",
