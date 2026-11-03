@@ -124,6 +124,28 @@ jobs:
             echo ">>> Bundling Penguin Saber vs. Conocer web game into /penguin/..."
             cp -r "$PROJ/penguin" /tmp/dist/web/penguin
             rm -f /tmp/dist/web/penguin/.gdignore
+            cat > /tmp/dist/web/404.html << 'EOF404'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Redirecting...</title>
+            <script>
+              (function() {
+                var p = window.location.pathname || "";
+                if (p.indexOf("/penguin") !== -1 || p.indexOf("pinguino") !== -1) {
+                  window.location.replace("/testgame/penguin/");
+                } else {
+                  window.location.replace("/testgame/");
+                }
+              })();
+            </script>
+          </head>
+          <body>
+            <p>Redirecting to <a href="/testgame/penguin/">¡Pingüi-Sabio! (Saber vs. Conocer)</a>...</p>
+          </body>
+          </html>
+          EOF404
           fi
 
           echo ">>> Exporting Linux x86_64..."
