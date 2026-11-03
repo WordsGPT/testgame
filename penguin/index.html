@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>¡Pingüi-Sabio! — Saber vs. Conocer | Aventura Antártica en Español</title>
+  <meta name="description" content="Juego interactivo de pingüinos para aprender cuándo usar SABER y CONOCER en español (presente, yo irregular sé/conozco, 'a' personal y pretérito supe/conocí)." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐧</text></svg>">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top Navigation & Score HUD -->
+  <header class="top-nav">
+    <div class="brand" id="brandHome" title="Volver al Capítulo 1">
+      <div class="brand-logo">🐧</div>
+      <div>
+        <span class="brand-title">¡Pingüi-Sabio! · Saber vs. Conocer</span>
+        <span class="brand-subtitle">Expedición Antártica del Español · Con Pipo el Pingüino</span>
+      </div>
+    </div>
+
+    <div class="hud-stats">
+      <div class="stat-pill fish" title="Peces atrapados (Puntos)">
+        <span>🐟 Sardinas:</span>
+        <span id="scoreValue">0</span>
+      </div>
+      <div class="stat-pill streak" title="Racha de respuestas correctas seguidas">
+        <span>🔥 Racha:</span>
+        <span id="streakValue">0</span>
+      </div>
+      <div class="stat-pill accuracy" title="Porcentaje de aciertos">
+        <span>🎯 Precisión:</span>
+        <span id="accuracyValue">100%</span>
+      </div>
+    </div>
+
+    <div class="nav-controls">
+      <button class="icon-btn active" id="btnHintToggle" title="Mostrar/ocultar pistas gramaticales y traducción al inglés">
+        <span>🔍 Pistas: ON</span>
+      </button>
+      <button class="icon-btn" id="btnSpeakCurrent" title="Escuchar la oración en español">
+        <span>🔊 Escuchar</span>
+      </button>
+      <button class="icon-btn active" id="btnSoundToggle" title="Activar/desactivar efectos de sonido y voz">
+        <span>🎵 Audio: ON</span>
+      </button>
+      <button class="icon-btn" id="btnOpenGuide" title="Abrir la Guía Polar de Saber vs. Conocer">
+        <span>📖 Guía Polar</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="app-container">
+    <!-- Chapter / Mode Selector Tabs -->
+    <nav class="mode-tabs" aria-label="Capítulos del juego">
+      <button class="mode-tab active" data-mode="chapter1">
+        <div class="mode-tab-header">
+          <span class="mode-tab-step">Capítulo 1</span>
+          <span class="mode-tab-badge">Base</span>
+        </div>
+        <div class="mode-tab-title">🎣 Pesca Glacial</div>
+        <div class="mode-tab-desc">¿Es SABER (dato/habilidad) o CONOCER (persona/lugar)?</div>
+      </button>
+
+      <button class="mode-tab" data-mode="chapter2">
+        <div class="mode-tab-header">
+          <span class="mode-tab-step">Capítulo 2</span>
+          <span class="mode-tab-badge">Yo: sé / conozco</span>
+        </div>
+        <div class="mode-tab-title">🛷 Tobogán del Glaciar</div>
+        <div class="mode-tab-desc">Elige la conjugación exacta al deslizarte por el hielo</div>
+      </button>
+
+      <button class="mode-tab" data-mode="chapter3">
+        <div class="mode-tab-header">
+          <span class="mode-tab-step">Capítulo 3</span>
+          <span class="mode-tab-badge">Pares Gemelos</span>
+        </div>
+        <div class="mode-tab-title">☕ Café del Iceberg</div>
+        <div class="mode-tab-desc">Contrastes engañosos y la «a» personal con personas</div>
+      </button>
+
+      <button class="mode-tab" data-mode="chapter4">
+        <div class="mode-tab-header">
+          <span class="mode-tab-step">Capítulo 4</span>
+          <span class="mode-tab-badge">Pretérito + Jefe</span>
+        </div>
+        <div class="mode-tab-title">🌌 Aurora Austral</div>
+        <div class="mode-tab-desc">Supe (me enteré) vs. Conocí (vi por 1.ª vez) + Reto Final</div>
+      </button>
+
+      <button class="mode-tab" data-mode="guide">
+        <div class="mode-tab-header">
+          <span class="mode-tab-step">Referencia</span>
+          <span class="mode-tab-badge">Chuleta</span>
+        </div>
+        <div class="mode-tab-title">📖 Guía Polar</div>
+        <div class="mode-tab-desc">Tabla interactiva, trucos visuales y ejemplos con voz</div>
+      </button>
+    </nav>
+
+    <!-- Interactive Penguin Canvas World -->
+    <section class="stage-wrapper" id="gameStageSection">
+      <canvas id="penguinCanvas" width="1080" height="330"></canvas>
+      <div class="canvas-overlay-badge" id="stageLocationBadge">
+        <span>🧊</span>
+        <span id="stageLocationText">Bahía del Hielo Azul · Capítulo 1: Pesca Glacial</span>
+      </div>
+      <div class="canvas-controls-hint" id="stageControlsHint">
+        ⌨️ Teclas <strong>1 / 2 / 3</strong> o <strong>⬅️ / ➡️</strong> · 🖱️ Haz clic en el hielo o en los botones
+      </div>
+    </section>
+
+    <!-- Active Question & Choices Deck -->
+    <section class="interaction-deck" id="questionDeck">
+      <div class="question-top-bar">
+        <div class="speaker-tag" id="npcSpeakerTag">
+          <span id="npcAvatar">🐧</span>
+          <span id="npcName">Capitán Pipo</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="category-pill" id="questionCategoryPill">Regla: Habilidad vs. Lugar</span>
+          <span class="category-pill" id="questionCounterPill" style="background:rgba(56,189,248,0.16); border-color:rgba(56,189,248,0.4); color:#bae6fd;">Pregunta 1 / 10</span>
+        </div>
+      </div>
+
+      <div class="sentence-box">
+        <div class="spanish-sentence" id="spanishSentenceDisplay">
+          Cargando expedición antártica...
+        </div>
+        <div class="english-translation" id="englishHintDisplay">
+          Loading Antarctic expedition...
+        </div>
+        <div class="clue-banner" id="grammarClueBanner">
+          <span>💡</span>
+          <span id="grammarClueText">Pista polar: Observa qué viene después del verbo.</span>
+        </div>
+      </div>
+
+      <div class="choices-grid" id="choicesContainer">
+        <!-- Dynamically populated buttons -->
+      </div>
+
+      <!-- Pedagogical Feedback Drawer -->
+      <div class="feedback-card" id="feedbackDrawer">
+        <div class="feedback-content">
+          <div class="feedback-title" id="feedbackTitle">¡Excelente pesca!</div>
+          <div class="feedback-explanation" id="feedbackExplanation"></div>
+          <span class="feedback-rule-tag" id="feedbackRuleTag"></span>
+        </div>
+        <button class="next-btn" id="btnNextQuestion">Siguiente Témpano ➔ (Enter)</button>
+      </div>
+    </section>
+
+    <!-- Polar Field Guide (Cheat Sheet & Audio Examples) -->
+    <section class="guide-panel" id="guideSection">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="font-size:1.5rem; color:#fde68a;">🧭 Guía Polar del Profesor Pico: ¿Cuándo usar SABER vs. CONOCER?</h2>
+          <p style="color:#bae6fd; font-size:0.95rem; margin-top:4px;">
+            En inglés ambos significan <em>"to know"</em>, pero en español dividen el mundo en dos icebergs muy claros. ¡Haz clic en cualquier ejemplo para escucharlo!
+          </p>
+        </div>
+        <button class="next-btn" id="btnBackToGame">🎮 ¡Volver a Jugar!</button>
+      </div>
+
+      <div class="iceberg-comparison">
+        <!-- SABER Card -->
+        <div class="iceberg-card saber">
+          <h3>🧠🐟 SABER <span style="font-size:0.85rem; font-weight:600; color:#7dd3fc;">(Datos, Información y Habilidades)</span></h3>
+          <p style="font-size:0.88rem; color:#e0f2fe;">Usa <strong>SABER</strong> para lo que tienes guardado en la cabeza: hechos, datos, memoria o cómo hacer algo.</p>
+
+          <ul class="rule-list">
+            <li>
+              <strong>1. Datos, hechos e información específica</strong><br/>
+              Especialmente antes de palabras interrogativas: <em>qué, quién, dónde, cuándo, cómo, por qué, cuánto, si, que...</em>
+              <div class="rule-example" data-tts="Yo sé dónde viven los pingüinos emperador.">
+                <span>«Yo <u>sé</u> dónde viven los pingüinos emperador.»</span>
+                <span>🔊</span>
+              </div>
+              <div class="rule-example" data-tts="¿Sabes a qué hora sale el rompehielos?">
+                <span>«¿<u>Sabes</u> a qué hora sale el rompehielos?»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+            <li>
+              <strong>2. Habilidades aprendidas: SABER + INFINITIVO (-ar, -er, -ir)</strong><br/>
+              Para decir <em>"to know how to do something"</em>, en español <strong>NUNCA</strong> se dice <em>"saber cómo + infinitivo"</em>: se usa directamente <strong>saber + infinitivo</strong>.
+              <div class="rule-example" data-tts="Pipo sabe nadar muy rápido bajo el hielo.">
+                <span>«Pipo <u>sabe nadar</u> muy rápido bajo el hielo.»</span>
+                <span>🔊</span>
+              </div>
+              <div class="rule-example" data-tts="¿Sabes patinar sobre el glaciar?">
+                <span>«¿<u>Sabes patinar</u> sobre el glaciar?»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+            <li>
+              <strong>3.En pretérito (pasado): SUPE = "I found out / learned"</strong><br/>
+              En pasado indefinido, <em>saber</em> cambia de matiz a «enterarse de algo».
+              <div class="rule-example" data-tts="Ayer supe que habrá una tormenta de nieve.">
+                <span>«Ayer <u>supe</u> que habrá una tormenta de nieve.»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+          </ul>
+
+          <table class="conj-table">
+            <thead>
+              <tr><th>Pronombre</th><th>Presente (SABER)</th><th>Pretérito (enterarse)</th></tr>
+            </thead>
+            <tbody>
+              <tr class="irregular-yo"><td>yo</td><td><strong>sé</strong> ⚠️ (¡con tilde, no «sabo»!)</td><td>supe</td></tr>
+              <tr><td>tú / vos</td><td>sabes / sabés</td><td>supiste</td></tr>
+              <tr><td>él / ella / Ud.</td><td>sabe</td><td>supo</td></tr>
+              <tr><td>nosotros/as</td><td>sabemos</td><td>supimos</td></tr>
+              <tr><td>vosotros/as</td><td>sabéis</td><td>supisteis</td></tr>
+              <tr><td>ellos / Uds.</td><td>saben</td><td>supieron</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- CONOCER Card -->
+        <div class="iceberg-card conocer">
+          <h3>🤝🏔️ CONOCER <span style="font-size:0.85rem; font-weight:600; color:#fde68a;">(Personas, Lugares y Familiaridad)</span></h3>
+          <p style="font-size:0.88rem; color:#fef3c7;">Usa <strong>CONOCER</strong> para estar familiarizado con una persona, haber visitado un lugar o tener experiencia con una cosa/obra.</p>
+
+          <ul class="rule-list">
+            <li>
+              <strong>1. Personas: CONOCER + «A» PERSONAL + persona</strong><br/>
+              ¡Ojo! Cuando conoces a una persona (o mascota con nombre), siempre lleva la preposición <strong>«a»</strong>.
+              <div class="rule-example" data-tts="Yo conozco a la capitana Luna.">
+                <span>«Yo <u>conozco a</u> la capitana Luna.»</span>
+                <span>🔊</span>
+              </div>
+              <div class="rule-example" data-tts="¿Conoces al chef del iglú?">
+                <span>«¿<u>Conoces al</u> (a + el) chef del iglú?»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+            <li>
+              <strong>2. Lugares, ciudades, países y espacios (SIN «a»)</strong><br/>
+              Haber estado en un sitio o estar familiarizado con él.
+              <div class="rule-example" data-tts="Nosotros conocemos la Antártida y la Patagonia.">
+                <span>«Nosotros <u>conocemos</u> la Antártida y la Patagonia.»</span>
+                <span>🔊</span>
+              </div>
+              <div class="rule-example" data-tts="¿Conoces este restaurante de pescado?">
+                <span>«¿<u>Conoces</u> este restaurante de pescado?»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+            <li>
+              <strong>3. En pretérito (pasado): CONOCÍ = "I met for the first time"</strong><br/>
+              En pasado indefinido, <em>conocer a alguien</em> significa «conocer por primera vez» (<em>to meet</em>).
+              <div class="rule-example" data-tts="Conocí a mi mejor amigo en Ushuaia.">
+                <span>«<u>Conocí a</u> mi mejor amigo en Ushuaia.»</span>
+                <span>🔊</span>
+              </div>
+            </li>
+          </ul>
+
+          <table class="conj-table">
+            <thead>
+              <tr><th>Pronombre</th><th>Presente (CONOCER)</th><th>Pretérito (1.ª vez)</th></tr>
+            </thead>
+            <tbody>
+              <tr class="irregular-yo"><td>yo</td><td><strong>conozco</strong> ⚠️ (-zco, no «conoco»)</td><td>conocí</td></tr>
+              <tr><td>tú / vos</td><td>conoces / conocés</td><td>conociste</td></tr>
+              <tr><td>él / ella / Ud.</td><td>conoce</td><td>conoció</td></tr>
+              <tr><td>nosotros/as</td><td>conocemos</td><td>conocimos</td></tr>
+              <tr><td>vosotros/as</td><td>conocéis</td><td>conocisteis</td></tr>
+              <tr><td>ellos / Uds.</td><td>conocen</td><td>conocieron</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tricky Contrast Box -->
+      <div style="background:rgba(15, 39, 71, 0.85); border:1px solid var(--ice-border); border-radius:14px; padding:16px;">
+        <h3 style="color:#7dd3fc; margin-bottom:8px;">⚡ El Truco de Oro: Compara estos pares gemelos</h3>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; font-size:0.9rem;">
+          <div style="background:rgba(0,0,0,0.25); padding:10px; border-radius:8px;">
+            🏔️ <strong>¿Conoces Ushuaia?</strong> (Lugar → ¿Has estado allí?)<br/>
+            🧠 <strong>¿Sabes dónde está Ushuaia?</strong> (Dato con <em>dónde</em> → Información geográfica)
+          </div>
+          <div style="background:rgba(0,0,0,0.25); padding:10px; border-radius:8px;">
+            🤝 <strong>Conozco a Shakira / al profesor.</strong> (Persona con <em>a</em>)<br/>
+            🧠 <strong>Sé cómo se llama el profesor.</strong> (Dato con <em>cómo</em>)
+          </div>
+          <div style="background:rgba(0,0,0,0.25); padding:10px; border-radius:8px;">
+            🎵 <strong>¿Conoces esa canción?</strong> (Familiaridad: ¿la has oído antes?)<br/>
+            🧠 <strong>¿Te sabes la letra de memoria?</strong> (Memorizado al 100%)
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Progress Bar & Custom Topic Filter -->
+    <footer class="bottom-bar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:0.85rem; font-weight:700; color:#bae6fd;" id="chapterProgressLabel">Progreso del Capítulo: 0 / 10</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="chapterProgressBar"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label for="topicFilterSelect" style="font-size:0.82rem; color:#bae6fd;">Entrenamiento:</label>
+        <select id="topicFilterSelect" class="filter-select">
+          <option value="chapter">Modo Historia por Capítulos</option>
+          <option value="all">🔀 Todo Mezclado (44 Retos)</option>
+          <option value="yo_irregular">⚠️ Especial «Yo»: sé vs. conozco</option>
+          <option value="skills_places">🏊 Habilidades (+ inf.) vs. Lugares</option>
+          <option value="people_facts">🤝 Personas (con «a») vs. Datos</option>
+          <option value="preterite">⏳ Pretérito: supe vs. conocí</option>
+          <option value="mistakes">🩹 Repasar mis errores</option>
+        </select>
+      </div>
+    </footer>
+  </main>
+
+  <!-- Chapter Completion & Mastery Modal -->
+  <div class="modal-backdrop" id="summaryModal">
+    <div class="modal-card">
+      <div style="font-size:3rem; margin-bottom:6px;" id="modalEmoji">🏆🐧</div>
+      <h2 id="modalTitle">¡Capítulo Completado!</h2>
+      <p id="modalSubtitle" style="color:#bae6fd; font-size:0.96rem;"></p>
+
+      <div class="skill-breakdown" id="modalStatsGrid">
+        <!-- Populated by JS -->
+      </div>
+
+      <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:18px;">
+        <button class="icon-btn" id="btnModalReviewMistakes" style="display:none; border-color:#f87171; color:#fecaca;">
+          🩹 Repasar Errores
+        </button>
+        <button class="icon-btn" id="btnModalReplay">
+          🔄 Repetir Capítulo
+        </button>
+        <button class="next-btn" id="btnModalNextChapter">
+          Siguiente Capítulo ➔
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

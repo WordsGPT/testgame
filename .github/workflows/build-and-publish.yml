@@ -120,6 +120,11 @@ jobs:
           godot --headless --path "$PROJ" --export-release "Web" /tmp/dist/web/index.html
           rm -f /tmp/dist/web/*.import
           touch /tmp/dist/web/.nojekyll
+          if [ -d "$PROJ/penguin" ]; then
+            echo ">>> Bundling Penguin Saber vs. Conocer web game into /penguin/..."
+            cp -r "$PROJ/penguin" /tmp/dist/web/penguin
+            rm -f /tmp/dist/web/penguin/.gdignore
+          fi
 
           echo ">>> Exporting Linux x86_64..."
           godot --headless --path "$PROJ" --export-release "Linux" /tmp/dist/linux/franc_tireur.x86_64
